@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
 	name='rhseung.units',
-	version='0.1.0',
+	version='0.1.2',
 	description='A package for handling units.',
 	author='rhseung',
 	license='MIT',
@@ -14,3 +14,4 @@ setup(
 	package_data={},
 	zip_safe=False
 )
+

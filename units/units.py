@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .vec import Vec, Iterable
+from .vec import Vector, Iterable
 from math import pi
 
 @dataclass
@@ -11,7 +11,7 @@ class Unit:
 	K: float = 0
 	mol: float = 0
 	cd: float = 0
-	
+
 	def __iter__(self):
 		yield 'kg', self.kg
 		yield 'm', self.m
@@ -20,10 +20,10 @@ class Unit:
 		yield 'K', self.K
 		yield 'mol', self.mol
 		yield 'cd', self.cd
-	
+
 	def __pos__(self):
 		return self
-	
+
 	def __neg__(self):
 		return Unit(
 			-self.kg,
@@ -34,7 +34,7 @@ class Unit:
 			-self.mol,
 			-self.cd
 		)
-	
+
 	def __add__(self, other):
 		if isinstance(other, Unit):
 			return Unit(
@@ -48,10 +48,10 @@ class Unit:
 			)
 		else:
 			return NotImplemented
-	
+
 	def __sub__(self, other):
 		return self.__add__(-other)
-	
+
 	def __mul__(self, other):
 		if isinstance(other, int | float):
 			return Unit(
@@ -65,27 +65,27 @@ class Unit:
 			)
 		else:
 			return NotImplemented
-	
+
 	def __rmul__(self, other):
 		return self.__mul__(other)
-	
+
 	def __eq__(self, other):
 		if isinstance(other, Unit):
 			return all(_s == _o for _s, _o in zip(self, other))
 		else:
 			return NotImplemented
-	
+
 	def __repr__(self):
 		ret = "Unit("
 		for name, power in self:
 			if power == 0:
 				continue
-			
+
 			ret += f"{name}={power}, "
 		ret = ret[:-2] + ")"
-		
+
 		return ret
-	
+
 	__str__ = __repr__
 
 Unit.dimensionless = Unit()
@@ -94,10 +94,10 @@ class UnitError(Exception):
 	pass
 
 class Quantity:
-	def __init__(self, value: float | Vec, dimension: Unit = Unit.dimensionless):
+	def __init__(self, value: float | Vector, dimension: Unit = Unit.dimensionless):
 		self.value = value
 		self.dimension = dimension
-	
+
 	def __str__(self):
 		dot = '⋅'
 		dimension_string = ["", ""]
@@ -109,22 +109,22 @@ class Quantity:
 			else:
 				__str = str(int(abs(power)) if power.is_integer() else abs(power))
 				dimension_string[power < 0] += name + '^' + __str + dot
-		
+
 		front, back = dimension_string
 		front = front.strip(dot)
 		back = back.strip(dot)
-		
-		return f"{self.value} {front}{"/" if back else ""}{back}".strip()
-	
+
+		return f"{self.value} {front}{'/' if back else ''}{back}".strip()
+
 	def __repr__(self):
 		return self.__str__()
-	
+
 	def __pos__(self):
 		return self
-	
+
 	def __neg__(self):
 		return Quantity(-self.value, self.dimension)
-	
+
 	def __eq__(self, other):
 		if isinstance(other, Quantity):
 			if self.value == other.value:
@@ -133,7 +133,7 @@ class Quantity:
 			return self.value == 0 and other == 0
 		else:
 			return NotImplemented
-	
+
 	def __lt__(self, other):
 		if isinstance(other, Quantity):
 			if self.dimension == other.dimension:
@@ -142,10 +142,10 @@ class Quantity:
 				raise UnitError(f"Cannot compare {self.dimension} and {other.dimension}.")
 		else:
 			return self.value < other
-	
+
 	def __gt__(self, other):
 		return other < self
-	
+
 	def __add__(self, other):
 		if isinstance(other, Quantity):
 			if self.dimension == other.dimension:
@@ -154,96 +154,96 @@ class Quantity:
 				raise UnitError(f"Cannot add {self.dimension} and {other.dimension}.")
 		else:
 			return Quantity(self.value + other, self.dimension)
-	
+
 	def __radd__(self, other):
 		return self.__add__(other)
-	
+
 	def __sub__(self, other):
 		return self.__add__(-other)
-	
+
 	def __rsub__(self, other):
 		return -(self.__add__(-other))
-	
+
 	def __mul__(self, other):
 		if isinstance(other, Quantity):
 			ret = Quantity(self.value * other.value, self.dimension + other.dimension)
 			return ret
-		
+
 		# todo: 무차원 상수를 어떻게 다뤄야 하지
 		# if ret.dimension == Unit.dimensionless:
 		# 	return ret.value
 		# else:
 		# 	return ret
 		elif isinstance(other, tuple):
-			return Quantity(self.value * Vec(other), self.dimension)
+			return Quantity(self.value * Vector(other), self.dimension)
 		elif isinstance(other, Iterable):
 			for i in range(len(other)):
 				other[i] *= self
 			return other
 		else:
 			return Quantity(self.value * other, self.dimension)
-	
+
 	def __rmul__(self, other):
 		return self.__mul__(other)
-	
+
 	def __truediv__(self, other):
 		return self.__mul__(1 / other)
-	
+
 	def __rtruediv__(self, other):
 		if isinstance(other, tuple):
-			return Quantity(Vec(other) / self.value, -self.dimension)
+			return Quantity(Vector(other) / self.value, -self.dimension)
 		else:
 			return Quantity(other / self.value, -self.dimension)
-	
+
 	def __pow__(self, other: int):
 		if isinstance(other, int | float):
 			return Quantity(self.value ** other, self.dimension * other)
 		else:
 			return NotImplemented
-	
+
 	def __abs__(self):
 		return Quantity(abs(self.value), self.dimension)
-	
+
 	def __iter__(self):
 		if self.is_vector():
 			yield self.x
 			yield self.y
 		else:
 			yield self
-	
+
 	def __int__(self):
 		return int(self.value)
-	
+
 	def __float__(self):
 		return float(self.value)
-	
+
 	def is_vector(self, unit: "Quantity" = None):
-		return isinstance(self.value, Vec) and (unit is None or self.unit == unit.unit)
-	
+		return isinstance(self.value, Vector) and (unit is None or self.unit == unit.unit)
+
 	def is_scalar(self, unit: "Quantity" = None):
 		return not self.is_vector() and (unit is None or self.unit == unit.unit)
-	
+
 	def magnitude(self):
 		return abs(self)
-	
+
 	@property
 	def unit(self):
 		return Quantity(1, self.dimension)
-	
+
 	@property
 	def x(self):
 		if self.is_vector():
 			return Quantity(self.value.x, self.dimension)
 		else:
 			raise TypeError("This quantity is not a vector.")
-	
+
 	@property
 	def y(self):
 		if self.is_vector():
 			return Quantity(self.value.y, self.dimension)
 		else:
 			raise TypeError("This quantity is not a vector.")
-	
+
 	@staticmethod
 	def xy(x: "Quantity", y: "Quantity"):
 		if x.unit != y.unit:
