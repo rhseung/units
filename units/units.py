@@ -5,7 +5,7 @@ class UnitError(Exception):
 	pass
 
 class Unit:
-	def __init__(self, *, kg=0., m=0., s=0., A=0., K=0., mol=0., cd=0.):
+	def __init__(self, *, kg=0., m=0., s=0., A=0., K=0., mol=0., cd=0., rad=0.):
 		self.__data: dict[str, float] = {
 			'kg': kg,
 			'm': m,
@@ -13,7 +13,8 @@ class Unit:
 			'A': A,
 			'K': K,
 			'mol': mol,
-			'cd': cd
+			'cd': cd,
+			'rad': rad
 		}
 
 	@property
@@ -43,6 +44,10 @@ class Unit:
 	@property
 	def cd(self) -> float:
 		return self.__data['cd']
+	
+	@property
+	def rad(self) -> float:
+		return self.__data['rad']
 	
 	def __bool__(self) -> bool:
 		return any(self.__data.values())
@@ -117,6 +122,8 @@ class Unit:
 			return NotImplemented
 
 class Quantity:
+	presets: dict[str, Unit] = {}
+	
 	def __init__(self, value: float | Vector, unit: Unit):
 		self.__value = value
 		self.__unit = unit
@@ -431,9 +438,13 @@ A = Unit(A=1)
 K = Unit(K=1)
 mol = Unit(mol=1)
 cd = Unit(cd=1)
+rad = Unit(rad=1)
+
+Quantity.presets['N'] = kg * m/s**2
+Quantity.presets['J'] = (kg * m/s**2) * m
+Quantity.presets['Pa'] = (kg * m/s**2) / m**2
 
 __all__ = [
 	"Unit", "UnitError", "Quantity", "prefixes",
-	"kg", "m", "s", "A", "K", "mol", "cd",
-	# "g", "km", "cm", "ms", "rad",
+	"kg", "m", "s", "A", "K", "mol", "cd", "rad"
 ]

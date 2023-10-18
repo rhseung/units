@@ -7,4 +7,4 @@ J = N*m
 E1 = 3.2*J
 E2 = 3.2*J
 
-print(E1 / 2)
+print(3*rad/s**2)

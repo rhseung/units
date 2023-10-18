@@ -22,8 +22,7 @@ class Vector:
 			return Vector(r*sin(theta)*cos(phi), r**sin(theta)*sin(phi), r*cos(theta))
 	
 	def _repr_latex_(self) -> str:
-		# todo: 어떻게 하는 거임
-		...
+		return f"$\\begin{{bmatrix}}{self.i}\\\\{self.j}\\end{{bmatrix}}$"
 	
 	@property
 	def dim(self) -> int:
@@ -153,9 +152,9 @@ class Vector:
 			
 			if self.dim == 3:
 				text.append(options.format(self.phi))
-				return f"({text[0]}, {text[1]} rad, {text[2]} rad)"
+				return f"({text[0]}, {text[1]}, {text[2]})"
 			else:
-				return f"({text[0]}, {text[1]} rad)"
+				return f"({text[0]}, {text[1]})"
 		elif format_spec.endswith('u'):  # unit vector
 			options = '{:' + format_spec[:-1] + '}'
 			text = [options.format(_e) for _e in self.__args]
