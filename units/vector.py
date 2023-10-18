@@ -21,8 +21,14 @@ class Vector:
 		else:
 			return Vector(r*sin(theta)*cos(phi), r**sin(theta)*sin(phi), r*cos(theta))
 	
-	def _repr_latex_(self) -> str:
-		return f"$\\begin{{bmatrix}}{self.i}\\\\{self.j}\\end{{bmatrix}}$"
+	def _repr_latex_(self, get=False) -> str:
+		_content = '\\\\'.join(map(str, self.__args))
+		if get:
+			return _content
+		else:
+			# return f"$\\begin{{bmatrix}} {_content} \\end{{bmatrix}}$"
+			# fixme: this is a temporary fix
+			return f"$\\mathrm{{ {_content} }}$"
 	
 	@property
 	def dim(self) -> int:

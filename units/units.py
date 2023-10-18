@@ -5,6 +5,8 @@ class UnitError(Exception):
 	pass
 
 class Unit:
+	__preset: dict[str, "Unit"] = {}
+
 	def __init__(self, *, kg=0., m=0., s=0., A=0., K=0., mol=0., cd=0., rad=0.):
 		self.__data: dict[str, float] = {
 			'kg': kg,
@@ -52,6 +54,14 @@ class Unit:
 	def __bool__(self) -> bool:
 		return any(self.__data.values())
 
+	def _repr_latex_(self, get=False) -> str:
+		_content = str(self.unit).replace('**', '^').replace('*', ' \\cdot ')
+		
+		if get:
+			return _content
+		else:
+			return f"$\\mathrm{{ {_content} }}$"
+
 	def __repr__(self) -> str:
 		_mul = '*'  # '⋅'
 		_pow = '**'  # '^'
@@ -59,6 +69,7 @@ class Unit:
 		ret = ["", ""]
 		
 		for name, power in self.__data.items():
+			# todo: 복합단위 표현하기
 			if power == 0:
 				continue
 			elif abs(power) == 1:
@@ -121,9 +132,7 @@ class Unit:
 		else:
 			return NotImplemented
 
-class Quantity:
-	presets: dict[str, Unit] = {}
-	
+class Quantity:	
 	def __init__(self, value: float | Vector, unit: Unit):
 		self.__value = value
 		self.__unit = unit
@@ -157,6 +166,11 @@ class Quantity:
 	
 	def __abs__(self):
 		return Quantity(abs(self.__value), self.__unit)
+
+	def _repr_latex_(self):
+		# todo: self.value 가 벡터일 때 latex 표현하기
+		# fixme: this is a temporary fix
+		return f"$\mathrm{{ {self.value if self.is_scalar() else self.value._repr_latex_(True)}~~{self.unit._repr_latex_(True)} }}$"
 
 	def __format__(self, format_spec):
 		return f"{self.__value:{format_spec}} [{self.__unit}]"
@@ -252,163 +266,6 @@ class Quantity:
 		else:
 			return NotImplemented
 
-# class Quantity:
-# 	def __init__(self, value: float | Vector, dimension: Unit = Unit.dimensionless):
-# 		self.value = value
-# 		self.dimension = dimension
-#
-# 	def __str__(self):
-# 		dot = '⋅'
-# 		dimension_string = ["", ""]
-# 		for name, power in self.dimension:
-# 			if power == 0:
-# 				continue
-# 			elif abs(power) == 1:
-# 				dimension_string[power < 0] += name + dot
-# 			else:
-# 				__str = str(int(abs(power)) if power.is_integer() else abs(power))
-# 				dimension_string[power < 0] += name + '^' + __str + dot
-#
-# 		front, back = dimension_string
-# 		front = front.strip(dot)
-# 		back = back.strip(dot)
-#
-# 		return f"{self.value} {front}{'/' if back else ''}{back}".strip()
-#
-# 	def __repr__(self):
-# 		return self.__str__()
-#
-# 	def __pos__(self):
-# 		return self
-#
-# 	def __neg__(self):
-# 		return Quantity(-self.value, self.dimension)
-#
-# 	def __eq__(self, other):
-# 		if isinstance(other, Quantity):
-# 			if self.value == other.value:
-# 				return True if self.value == 0 else self.dimension == other.dimension
-# 		elif isinstance(other, int | float):
-# 			return self.value == 0 and other == 0
-# 		else:
-# 			return NotImplemented
-#
-# 	def __lt__(self, other):
-# 		if isinstance(other, Quantity):
-# 			if self.dimension == other.dimension:
-# 				return self.value < other.value
-# 			else:
-# 				raise UnitError(f"Cannot compare {self.dimension} and {other.dimension}.")
-# 		else:
-# 			return self.value < other
-#
-# 	def __gt__(self, other):
-# 		return other < self
-#
-# 	def __add__(self, other):
-# 		if isinstance(other, Quantity):
-# 			if self.dimension == other.dimension:
-# 				return Quantity(self.value + other.value, self.dimension)
-# 			else:
-# 				raise UnitError(f"Cannot add {self.dimension} and {other.dimension}.")
-# 		else:
-# 			return Quantity(self.value + other, self.dimension)
-#
-# 	def __radd__(self, other):
-# 		return self.__add__(other)
-#
-# 	def __sub__(self, other):
-# 		return self.__add__(-other)
-#
-# 	def __rsub__(self, other):
-# 		return -(self.__add__(-other))
-#
-# 	def __mul__(self, other):
-# 		if isinstance(other, Quantity):
-# 			ret = Quantity(self.value * other.value, self.dimension + other.dimension)
-# 			return ret
-#
-# 		# todo: 무차원 상수를 어떻게 다뤄야 하지
-# 		# if ret.dimension == Unit.dimensionless:
-# 		# 	return ret.value
-# 		# else:
-# 		# 	return ret
-# 		elif isinstance(other, tuple):
-# 			return Quantity(self.value * Vector(other), self.dimension)
-# 		elif isinstance(other, Iterable):
-# 			for i in range(len(other)):
-# 				other[i] *= self
-# 			return other
-# 		else:
-# 			return Quantity(self.value * other, self.dimension)
-#
-# 	def __rmul__(self, other):
-# 		return self.__mul__(other)
-#
-# 	def __truediv__(self, other):
-# 		return self.__mul__(1 / other)
-#
-# 	def __rtruediv__(self, other):
-# 		if isinstance(other, tuple):
-# 			return Quantity(Vector(other) / self.value, -self.dimension)
-# 		else:
-# 			return Quantity(other / self.value, -self.dimension)
-#
-# 	def __pow__(self, other: int):
-# 		if isinstance(other, int | float):
-# 			return Quantity(self.value ** other, self.dimension * other)
-# 		else:
-# 			return NotImplemented
-#
-# 	def __abs__(self):
-# 		return Quantity(abs(self.value), self.dimension)
-#
-# 	def __iter__(self):
-# 		if self.is_vector():
-# 			yield self.x
-# 			yield self.y
-# 		else:
-# 			yield self
-#
-# 	def __int__(self):
-# 		return int(self.value)
-#
-# 	def __float__(self):
-# 		return float(self.value)
-#
-# 	def is_vector(self, unit: "Quantity" = None):
-# 		return isinstance(self.value, Vector) and (unit is None or self.unit == unit.unit)
-#
-# 	def is_scalar(self, unit: "Quantity" = None):
-# 		return not self.is_vector() and (unit is None or self.unit == unit.unit)
-#
-# 	def magnitude(self):
-# 		return abs(self)
-#
-# 	@property
-# 	def unit(self):
-# 		return Quantity(1, self.dimension)
-#
-# 	@property
-# 	def x(self):
-# 		if self.is_vector():
-# 			return Quantity(self.value.x, self.dimension)
-# 		else:
-# 			raise TypeError("This quantity is not a vector.")
-#
-# 	@property
-# 	def y(self):
-# 		if self.is_vector():
-# 			return Quantity(self.value.y, self.dimension)
-# 		else:
-# 			raise TypeError("This quantity is not a vector.")
-#
-# 	@staticmethod
-# 	def xy(x: "Quantity", y: "Quantity"):
-# 		if x.unit != y.unit:
-# 			raise UnitError(f"{x.unit} and {y.unit} are not same.")
-# 		return (x.value, y.value) * x.unit
-
 prefixes = {
 	'Y': 1e24,
 	'Z': 1e21,
@@ -440,9 +297,10 @@ mol = Unit(mol=1)
 cd = Unit(cd=1)
 rad = Unit(rad=1)
 
-Quantity.presets['N'] = kg * m/s**2
-Quantity.presets['J'] = (kg * m/s**2) * m
-Quantity.presets['Pa'] = (kg * m/s**2) / m**2
+Unit.presets['N'] = kg * m/s**2
+Unit.presets['J'] = (kg * m/s**2) * m
+Unit.presets['Pa'] = (kg * m/s**2) / m**2
+# todo: 복합 단위 더 추가하기
 
 __all__ = [
 	"Unit", "UnitError", "Quantity", "prefixes",
