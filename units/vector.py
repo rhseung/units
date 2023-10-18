@@ -7,21 +7,20 @@ class DimensionError(Exception):
 
 class Vector:
 	def __init__(self, *args: int | float):
+		if len(args) == 1 and isinstance(args[0], Vector):
+			self.__args = args[0].__args
+		if any(not isinstance(arg, int | float) for arg in args):
+			raise TypeError(f"Vector.__init__: {args}")
+		
 		self.__args = args
 	
 	@staticmethod
-	def polar(r, theta) -> "Vector":
-		return Vector(r * cos(theta), r * sin(theta))
-	
-	def magnitude(self) -> float:
-		return sum(arg ** 2 for arg in self.__args) ** 0.5
-	
-	def angle(self) -> float:
-		if len(self) == 2:
-			return atan2(self.j, self.i)
+	def polar(r, theta, phi=None) -> "Vector":
+		if phi is None:
+			return Vector(r*cos(theta), r*sin(theta))
 		else:
-			raise DimensionError(f"input: {len(self)}, expected: 2")
-		
+			return Vector(r*sin(theta)*cos(phi), r**sin(theta)*sin(phi), r*cos(theta))
+	
 	def _repr_latex_(self) -> str:
 		# todo: 어떻게 하는 거임
 		...
@@ -48,14 +47,26 @@ class Vector:
 	
 	@property
 	def r(self) -> float:
-		return self.magnitude()
+		return sum(arg ** 2 for arg in self.__args) ** 0.5
 	
 	@property
 	def theta(self) -> float:
-		return self.angle()
+		if self.dim == 2:
+			return atan2(self.j, self.i)
+		elif self.dim == 3:
+			return atan2((self.i**2 + self.j**2) ** 0.5, self.k)
+		else:
+			raise DimensionError(f"input: {len(self)}, expected: 2")
+	
+	@property
+	def phi(self) -> float:
+		if self.dim == 3:
+			return atan2(self.j, self.i)
+		else:
+			raise DimensionError(f"input: {len(self)}, expected: 3")
 	
 	def __abs__(self) -> float:
-		return self.magnitude()
+		return self.r
 	
 	def __len__(self) -> int:
 		return self.dim
@@ -134,15 +145,19 @@ class Vector:
 	
 	def __format__(self, format_spec) -> str:
 		if format_spec.endswith('p'):  # polar coordinates
-			if self.dim != 2:
+			if self.dim not in (2, 3):
 				raise DimensionError(f"Vector.__format__: {self.dim}")
 			
-			options = '{:' + format_spec[:-1] + 'f}'
-			text = [options.format(self.magnitude()), options.format(self.angle())]
+			options = '{:' + format_spec[:-1] + '}'
+			text = [options.format(self.r), options.format(self.theta)]
 			
-			return f"({text[0]}, {text[1]} rad)"
+			if self.dim == 3:
+				text.append(options.format(self.phi))
+				return f"({text[0]}, {text[1]} rad, {text[2]} rad)"
+			else:
+				return f"({text[0]}, {text[1]} rad)"
 		elif format_spec.endswith('u'):  # unit vector
-			options = '{:' + format_spec[:-1] + 'f}'
+			options = '{:' + format_spec[:-1] + '}'
 			text = [options.format(_e) for _e in self.__args]
 			
 			subscripts = '₀₁₂₃₄₅₆₇₈₉'
@@ -173,7 +188,7 @@ class Vector:
 		if self.dim != other.dim:
 			raise DimensionError
 		
-		return self.magnitude() < other.magnitude()
+		return abs(self) < abs(other)
 
 	def __le__(self, other):
 		return self == other or self < other
@@ -185,10 +200,13 @@ class Vector:
 		return not (self < other)
 
 	def __int__(self) -> int:
-		return int(self.magnitude())
+		return int(abs(self))
 	
 	def __float__(self) -> float:
-		return float(self.magnitude())
+		return float(abs(self))
+	
+	def __bool__(self):
+		return bool(self.r)
 	
 	def __complex__(self) -> complex:
 		if self.dim == 2:
