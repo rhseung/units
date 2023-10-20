@@ -1,10 +1,7 @@
 from units import *
 from math import pi
 
-N = kg*m/s**2
-J = N*m
-
-E1 = 3.2*J
-E2 = 3.2*J
-
-print(3*rad/s**2)
+what = Eg * yg
+print(what)
+print(Eg.represent(), yg.represent(), what.represent())
+print(what.si())
