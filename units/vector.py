@@ -1,6 +1,11 @@
+__all__ = ['Vector', 'VecLike', 'Iterable']
+
 from numpy import ndarray
 from math import cos, sin, atan2
 from typing import TypeAlias
+
+Iterable: TypeAlias = list | ndarray
+VecLike: TypeAlias = tuple
 
 class DimensionError(Exception):
 	pass
@@ -218,8 +223,3 @@ class Vector:
 			return complex(self.i, self.j)
 		else:
 			raise DimensionError(f"input: {len(self)}, expected: 2")
-
-Iterable: TypeAlias = tuple | list | ndarray
-VecLike: TypeAlias = Vector | tuple
-
-__all__ = ['Vector', 'VecLike', 'Iterable']
