@@ -6,6 +6,17 @@ from enum import Enum
 def to_int_if_possible(value: float) -> int | float:
 	return int(value) if value.is_integer() else value
 
+def unit(fmt: str | int | float) -> 'UnitBase':
+	if isinstance(fmt, str):
+		try:
+			return Unit._instances[fmt]
+		except KeyError:
+			return Unit(fmt)
+	elif isinstance(fmt, int | float):
+		return ComplexUnit(Counter({}), fmt)
+	else:
+		raise TypeError(f"unit: {type(fmt)}")
+
 class Prefix(Enum):
 	Y = 1e24
 	Z = 1e21
@@ -30,148 +41,11 @@ class Prefix(Enum):
 class UnitError(Exception):
 	pass
 
-# class Unit:
-# 	presets: dict[str, "Unit"] = {}
-#
-# 	def __init__(self, *, kg=0., m=0., s=0., A=0., K=0., mol=0., cd=0., rad=0.):
-# 		self.__data: dict[str, float] = {
-# 			'kg': kg,
-# 			'm': m,
-# 			's': s,
-# 			'A': A,
-# 			'K': K,
-# 			'mol': mol,
-# 			'cd': cd,
-# 			'rad': rad
-# 		}
-#
-# 		# todo: __str은 생성 시 알아서 변경됨
-# 		#  /s**-2 같은 건 s**2 가 되도록 생각하면서 구현하기
-#
-# 	@property
-# 	def kg(self) -> float:
-# 		return self.__data['kg']
-#
-# 	@property
-# 	def m(self) -> float:
-# 		return self.__data['m']
-#
-# 	@property
-# 	def s(self) -> float:
-# 		return self.__data['s']
-#
-# 	@property
-# 	def A(self) -> float:
-# 		return self.__data['A']
-#
-# 	@property
-# 	def K(self) -> float:
-# 		return self.__data['K']
-#
-# 	@property
-# 	def mol(self) -> float:
-# 		return self.__data['mol']
-#
-# 	@property
-# 	def cd(self) -> float:
-# 		return self.__data['cd']
-#
-# 	@property
-# 	def rad(self) -> float:
-# 		return self.__data['rad']
-#
-# 	def __bool__(self) -> bool:
-# 		return any(self.__data.values())
-#
-# 	def _repr_latex_(self, get=False) -> str:
-# 		_content = str(self.unit).replace('**', '^').replace('*', ' \\cdot ')
-#
-# 		if get:
-# 			return _content
-# 		else:
-# 			return f"$\\mathrm{{ {_content} }}$"
-#
-# 	def __repr__(self) -> str:
-# 		_mul = '*'  # '⋅'
-# 		_pow = '**'  # '^'
-#
-# 		ret = ["", ""]
-#
-# 		for name, power in self.__data.items():
-# 			# todo: 복합단위 표현하기
-# 			if power == 0:
-# 				continue
-# 			elif abs(power) == 1:
-# 				ret[power < 0] += f"{name}{_mul}"
-# 			else:
-# 				ret[power < 0] += f'{name}{_pow}{int(abs(power)) if power.is_integer() else abs(power)}{_mul}'
-#
-# 		front, back = ret
-# 		front = front.strip(_mul)
-# 		back = back.strip(_mul)
-#
-# 		return f"{front}{'/' if back else ''}{back}".strip()
-#
-# 	def __str__(self) -> str:
-# 		return self.__repr__()
-#
-# 	def __iter__(self) -> iter:
-# 		yield from self.__data.items()
-#
-# 	def __pos__(self) -> "Unit":
-# 		return self
-#
-# 	def __neg__(self) -> "Unit":
-# 		return Unit(**{name: -power for name, power in self})
-#
-# 	def __eq__(self, other) -> bool:
-# 		if isinstance(other, Unit):
-# 			return self.__data == other.__data
-# 		else:
-# 			return NotImplemented
-#
-# 	def __mul__(self, other) -> "Unit":
-# 		if isinstance(other, Unit):
-# 			return Unit(**{name: power + other.__data[name] for name, power in self})
-# 		else:
-# 			return NotImplemented
-#
-# 	def __rmul__(self, other) -> "Quantity | Unit":
-# 		if isinstance(other, int | float):
-# 			return Quantity(other, self)
-# 		elif isinstance(other, VecLike):
-# 			return Quantity(Vector(*other), self)
-# 		else:
-# 			return self.__mul__(other)
-#
-# 	def __truediv__(self, other) -> "Unit":
-# 		return self.__mul__(-other)
-#
-# 	def __rtruediv__(self, other) -> "Quantity | Unit":
-# 		if isinstance(other, int | float):
-# 			return Quantity(other, -self)
-# 		elif isinstance(other, VecLike):
-# 			return Quantity(Vector(*other), -self)
-# 		else:
-# 			return NotImplemented
-#
-# 	def __divmod__(self, other):
-# 		# todo: divmod 구현하기
-# 		...
-#
-# 	def __pow__(self, other) -> "Unit":
-# 		if isinstance(other, int | float):
-# 			return Unit(**{name: power * float(other) for name, power in self})
-# 		else:
-# 			return NotImplemented
-
-# todo: scale, dimensionless
-
-# todo: UnitBase 만들고 Unit과 AbbreviateUnit은 UnitBase를 상속받게 하기 -> AbbreviateUnit은 인스턴스 추적 ㄴㄴ
+# todo: _repr_latex_ 구현하기
 
 class UnitBase(ABC):
 	def __init__(self):
-		self._scale: float = 1.
+		self._scale: int | float | complex = 1.
 	
 	@abstractmethod
 	def __pow__(self, power: int | float) -> 'ComplexUnit':
@@ -206,11 +80,11 @@ class UnitBase(ABC):
 		return NotImplemented
 
 	@property
-	def scale(self) -> float:
+	def scale(self) -> int | float | complex:
 		return self._scale
 
 class Unit(UnitBase):
-	_instances = {}
+	_instances: dict[str, 'Unit'] = {}
 	
 	def __new__(cls, symbol: str):
 		if symbol in cls._instances:
@@ -255,7 +129,7 @@ class Unit(UnitBase):
 		return ComplexUnit(new_counter, self.scale * other.scale)
 	
 	def __repr__(self) -> str:
-		return f"Unit('{self._symbol}')"
+		return self._symbol
 	
 	def represent(self) -> 'ComplexUnit | Unit':
 		return self
@@ -268,10 +142,10 @@ class Unit(UnitBase):
 		return self._symbol
 
 class ComplexUnit(UnitBase):
-	def __init__(self, elements: Counter[Unit] = None, scale: float = 1.):
+	def __init__(self, elements: Counter[Unit] = None, scale: int | float | complex = 1.):
 		super().__init__()
 		
-		self._scale = float(scale)
+		self._scale = scale
 		self._counter: Counter[Unit] = elements or Counter({})
 
 	def __deepcopy__(self) -> "ComplexUnit":
@@ -293,7 +167,7 @@ class ComplexUnit(UnitBase):
 		elif isinstance(other, ComplexUnit):
 			new_counter += other._counter
 		else:
-			raise TypeError(f"CompositeUnit.__mul__: {type(other)}")
+			raise TypeError(f"ComplexUnit.__mul__: {type(other)}")
 		
 		if len(new_counter) == 1 and self._scale == 1.:
 			return next(iter(new_counter))
@@ -302,12 +176,23 @@ class ComplexUnit(UnitBase):
 
 	def __repr__(self):
 		if self.is_dimensionless():
-			text = 'dimensionless'
+			return f"dimensionless with scale {self._scale}"
 		else:
-			arr = self._counter.map_to_list(lambda unit, power: f'{unit.symbol}**{to_int_if_possible(power)}')
-			text = ' '.join(arr)
+			slash = ['', '']
+			dot_sep, pow_sep = '*', '**'
 			
-		return f"CompositeUnit('{'' if self._scale == 1. else f'{to_int_if_possible(self._scale):.0e}' + ' '}{text}')"
+			for _u, _p in self._counter.items():
+				_p = to_int_if_possible(_p)
+				
+				if abs(_p) == 1:
+					slash[_p < 0] += f'{_u.symbol}{dot_sep}'
+				elif _p < 0:
+					slash[1] += f'{_u.symbol}{pow_sep}{-_p}{dot_sep}'
+				else:
+					slash[0] += f'{_u.symbol}{pow_sep}{_p}{dot_sep}'
+			
+			text = slash[0].rstrip(dot_sep) + ('' if not slash[1] else '/' + slash[1].rstrip(dot_sep))
+			return f"{text} with scale {self._scale}"
 
 	def represent(self) -> 'ComplexUnit':
 		if self.is_dimensionless():
@@ -351,7 +236,7 @@ class ComplexUnit(UnitBase):
 	def counter(self):
 		return self._counter
 
-class AbbreviateUnit(Unit):
+class DelayedUnit(Unit):
 	def __new__(cls, symbol: str, represent: ComplexUnit):
 		if symbol in cls._instances:
 			return cls._instances[symbol]
@@ -368,7 +253,7 @@ class AbbreviateUnit(Unit):
 		return hash(self._symbol)
 	
 	def __eq__(self, other):
-		return isinstance(other, AbbreviateUnit) and self._represent == other._represent
+		return isinstance(other, DelayedUnit) and self._represent == other._represent
 
 	def represent(self) -> ComplexUnit:
 		return self._represent
@@ -419,6 +304,16 @@ class PrefixUnit(Unit):
 	@property
 	def prefix(self):
 		return self._prefix
+
+# todo: Quantity 클래스 구현하기
+
+class Quantity:
+	def __init__(self, value: float | Vector, unit: UnitBase):
+		self._value = value
+		self._unit = unit
+
+	def is_vector(self, unit: Unit = None) -> bool:
+		return isinstance(self._value, Vector) and (unit is None or self.unit == unit)
 
 # class Quantity:
 # 	def __init__(self, value: float | Vector, unit: Unit):
@@ -565,68 +460,60 @@ mol = Unit('mol')
 cd = Unit('cd')
 rad = Unit('rad')
 
-N = AbbreviateUnit('N', kg * m/s**2)
-J = AbbreviateUnit('J', N * m)
-Pa = AbbreviateUnit('Pa', N / m**2)
-g = AbbreviateUnit('g', ComplexUnit(Counter({kg: 1}), 1e-3))
+g = DelayedUnit('g', ComplexUnit(Counter({kg: 1}), 1e-3))
+N = DelayedUnit('N', kg * m / s ** 2)
+J = DelayedUnit('J', N * m)
+Pa = DelayedUnit('Pa', N / m ** 2)
+W = DelayedUnit('W', J / s)
+atm = DelayedUnit('atm', ComplexUnit(Counter({Pa: 1}), 101325.))
+C = DelayedUnit('C', A * s)
+V = DelayedUnit('V', J / C)
+Ω = DelayedUnit('Ω', V / A)
+Wb = DelayedUnit('Wb', V * s)
+T = DelayedUnit('T', Wb / m ** 2)
+H = DelayedUnit('H', Wb / A)
+F = DelayedUnit('F', C / V)
 
-# for prefix in Prefix:
-# 	for unit in [g, m, s, A, K, mol, cd, rad]:
-# 		if unit == g and prefix == Prefix.k:
-# 			continue
-#
-# 		symbol_name = prefix.name + unit.symbol
-# 		print(symbol_name)
-# 		globals()[symbol_name] = PrefixUnit(prefix, unit)
+prefix_variants = [g, m, s, A, K, mol, cd, N, J, Pa, W, V, Ω, T, H, F]
 
-for prefix in Prefix:
-	for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]:
-		if prefix == Prefix.k and unit == g:
+for _p in Prefix:
+	if _p == Prefix.m:
+		globals()['milli'] = ComplexUnit(Counter({}), _p.value)
+	else:
+		globals()[_p.name] = ComplexUnit(Counter({}), _p.value)
+	
+	for _u in prefix_variants:
+		if _p == Prefix.k and _u == g:
 			continue
 
-		symbol_name = (prefix.name if prefix != Prefix.µ else 'micro_') + unit.symbol
-		globals()[symbol_name] = PrefixUnit(prefix, unit)
-
-# Yg, Ym, Ys, YA, YK, Ymol, Ycd, Yrad, YN, YJ, YPa = [PrefixUnit(Prefix.Y, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Zg, Zm, Zs, ZA, ZK, Zmol, Zcd, Zrad, ZN, ZJ, ZPa = [PrefixUnit(Prefix.Z, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Eg, Em, Es, EA, EK, Emol, Ecd, Erad, EN, EJ, EPa = [PrefixUnit(Prefix.E, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Pg, Pm, Ps, PA, PK, Pmol, Pcd, Prad, PN, PJ, PPa = [PrefixUnit(Prefix.P, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Tg, Tm, Ts, TA, TK, Tmol, Tcd, Trad, TN, TJ, TPa = [PrefixUnit(Prefix.T, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Gg, Gm, Gs, GA, GK, Gmol, Gcd, Grad, GN, GJ, GPa = [PrefixUnit(Prefix.G, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# Mg, Mm, Ms, MA, MK, Mmol, Mcd, Mrad, MN, MJ, MPa = [PrefixUnit(Prefix.M, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# km,     ks, kA, kK, kmol, kcd, krad, kN, kJ, kPa = [PrefixUnit(Prefix.k, unit) for unit in [m, s, A, K, mol, cd, rad, N, J, Pa]]
-# hg, hm, hs, hA, hK, hmol, hcd, hrad, hN, hJ, hPa = [PrefixUnit(Prefix.h, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# dg, dm, ds, dA, dK, dmol, dcd, drad, dN, dJ, dPa = [PrefixUnit(Prefix.d, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# cg, cm, cs, cA, cK, cmol, ccd, crad, cN, cJ, cPa = [PrefixUnit(Prefix.c, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# mg, mm, ms, mA, mK, mmol, mcd, mrad, mN, mJ, mPa = [PrefixUnit(Prefix.m, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# micro_g, micro_m, micro_s, micro_A, micro_K, micro_mol, micro_cd, micro_rad, micro_N, micro_J, micro_Pa = [PrefixUnit(Prefix.µ, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# ng, nm, ns, nA, nK, nmol, ncd, nrad, nN, nJ, nPa = [PrefixUnit(Prefix.n, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# pg, pm, ps, pA, pK, pmol, pcd, prad, pN, pJ, pPa = [PrefixUnit(Prefix.p, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# fg, fm, fs, fA, fK, fmol, fcd, frad, fN, fJ, fPa = [PrefixUnit(Prefix.f, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# ag, am, atto_s, aA, aK, amol, acd, arad, aN, aJ, aPa = [PrefixUnit(Prefix.a, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# zg, zm, zs, zA, zK, zmol, zcd, zrad, zN, zJ, zPa = [PrefixUnit(Prefix.z, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
-# yg, ym, ys, yA, yK, ymol, ycd, yrad, yN, yJ, yPa = [PrefixUnit(Prefix.y, unit) for unit in [g, m, s, A, K, mol, cd, rad, N, J, Pa]]
+		globals()[_p.name + _u.symbol] = PrefixUnit(_p, _u)
 
 __all__ = [
+	'unit',
+	
 	'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
-	'N', 'J', 'Pa',
-	'Yg', 'Ym', 'Ys', 'YA', 'YK', 'Ymol', 'Ycd', 'Yrad', 'YN', 'YJ', 'YPa',
-	'Zg', 'Zm', 'Zs', 'ZA', 'ZK', 'Zmol', 'Zcd', 'Zrad', 'ZN', 'ZJ', 'ZPa',
-	'Eg', 'Em', 'Es', 'EA', 'EK', 'Emol', 'Ecd', 'Erad', 'EN', 'EJ', 'EPa',
-	'Pg', 'Pm', 'Ps', 'PA', 'PK', 'Pmol', 'Pcd', 'Prad', 'PN', 'PJ', 'PPa',
-	'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'Trad', 'TN', 'TJ', 'TPa',
-	'Gg', 'Gm', 'Gs', 'GA', 'GK', 'Gmol', 'Gcd', 'Grad', 'GN', 'GJ', 'GPa',
-	'Mg', 'Mm', 'Ms', 'MA', 'MK', 'Mmol', 'Mcd', 'Mrad', 'MN', 'MJ', 'MPa',
-	'kg', 'km', 'ks', 'kA', 'kK', 'kmol', 'kcd', 'krad', 'kN', 'kJ', 'kPa',
-	'hg', 'hm', 'hs', 'hA', 'hK', 'hmol', 'hcd', 'hrad', 'hN', 'hJ', 'hPa',
-	'dg', 'dm', 'ds', 'dA', 'dK', 'dmol', 'dcd', 'drad', 'dN', 'dJ', 'dPa',
-	'cg', 'cm', 'cs', 'cA', 'cK', 'cmol', 'ccd', 'crad', 'cN', 'cJ', 'cPa',
-	'mg', 'mm', 'ms', 'mA', 'mK', 'mmol', 'mcd', 'mrad', 'mN', 'mJ', 'mPa',
-	'micro_g', 'micro_m', 'micro_s', 'micro_A', 'micro_K', 'micro_mol', 'micro_cd', 'micro_rad', 'micro_N', 'micro_J', 'micro_Pa',
-	'ng', 'nm', 'ns', 'nA', 'nK', 'nmol', 'ncd', 'nrad', 'nN', 'nJ', 'nPa',
-	'pg', 'pm', 'ps', 'pA', 'pK', 'pmol', 'pcd', 'prad', 'pN', 'pJ', 'pPa',
-	'fg', 'fm', 'fs', 'fA', 'fK', 'fmol', 'fcd', 'frad', 'fN', 'fJ', 'fPa',
-	'ag', 'am', 'as', 'aA', 'aK', 'amol', 'acd', 'arad', 'aN', 'aJ', 'aPa',
-	'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zrad', 'zN', 'zJ', 'zPa',
-	'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yrad', 'yN', 'yJ', 'yPa',
+	'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω',
+	
+	'Y', 'Yg', 'Ym', 'Ys', 'YA', 'YK', 'Ymol', 'Ycd', 'YN', 'YJ', 'YPa', 'YW', 'YV', 'YΩ', 'YT', 'YH', 'YF',
+	'Z', 'Zg', 'Zm', 'Zs', 'ZA', 'ZK', 'Zmol', 'Zcd', 'ZN', 'ZJ', 'ZPa', 'ZW', 'ZV', 'ZΩ', 'ZT', 'ZH', 'ZF',
+	'E', 'Eg', 'Em', 'Es', 'EA', 'EK', 'Emol', 'Ecd', 'EN', 'EJ', 'EPa', 'EW', 'EV', 'EΩ', 'ET', 'EH', 'EF',
+	'P', 'Pg', 'Pm', 'Ps', 'PA', 'PK', 'Pmol', 'Pcd', 'PN', 'PJ', 'PPa', 'PW', 'PV', 'PΩ', 'PT', 'PH', 'PF',
+	'T', 'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'TN', 'TJ', 'TPa', 'TW', 'TV', 'TΩ', 'TT', 'TH', 'TF',
+	'G', 'Gg', 'Gm', 'Gs', 'GA', 'GK', 'Gmol', 'Gcd', 'GN', 'GJ', 'GPa', 'GW', 'GV', 'GΩ', 'GT', 'GH', 'GF',
+	'M', 'Mg', 'Mm', 'Ms', 'MA', 'MK', 'Mmol', 'Mcd', 'MN', 'MJ', 'MPa', 'MW', 'MV', 'MΩ', 'MT', 'MH', 'MF',
+	'k', 'kg', 'km', 'ks', 'kA', 'kK', 'kmol', 'kcd', 'kN', 'kJ', 'kPa', 'kW', 'kV', 'kΩ', 'kT', 'kH', 'kF',
+	'h', 'hg', 'hm', 'hs', 'hA', 'hK', 'hmol', 'hcd', 'hN', 'hJ', 'hPa', 'hW', 'hV', 'hΩ', 'hT', 'hH', 'hF',
+	'd', 'dg', 'dm', 'ds', 'dA', 'dK', 'dmol', 'dcd', 'dN', 'dJ', 'dPa', 'dW', 'dV', 'dΩ', 'dT', 'dH', 'dF',
+	'c', 'cg', 'cm', 'cs', 'cA', 'cK', 'cmol', 'ccd', 'cN', 'cJ', 'cPa', 'cW', 'cV', 'cΩ', 'cT', 'cH', 'cF',
+	'milli', 'mg', 'mm', 'ms', 'mA', 'mK', 'mmol', 'mcd', 'mN', 'mJ', 'mPa', 'mW', 'mV', 'mΩ', 'mT', 'mH', 'mF',
+	'μ', 'μg', 'μm', 'μs', 'μA', 'μK', 'μmol', 'μcd', 'μN', 'μJ', 'μPa', 'μW', 'μV', 'μΩ', 'μT', 'μH', 'μF',
+	'n', 'ng', 'nm', 'ns', 'nA', 'nK', 'nmol', 'ncd', 'nN', 'nJ', 'nPa', 'nW', 'nV', 'nΩ', 'nT', 'nH', 'nF',
+	'p', 'pg', 'pm', 'ps', 'pA', 'pK', 'pmol', 'pcd', 'pN', 'pJ', 'pPa', 'pW', 'pV', 'pΩ', 'pT', 'pH', 'pF',
+	'f', 'fg', 'fm', 'fs', 'fA', 'fK', 'fmol', 'fcd', 'fN', 'fJ', 'fPa', 'fW', 'fV', 'fΩ', 'fT', 'fH', 'fF',
+	'a', 'ag', 'am', 'as', 'aA', 'aK', 'amol', 'acd', 'aN', 'aJ', 'aPa', 'aW', 'aV', 'aΩ', 'aT', 'aH', 'aF',
+	'z', 'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zN', 'zJ', 'zPa', 'zW', 'zV', 'zΩ', 'zT', 'zH', 'zF',
+	'y', 'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yN', 'yJ', 'yPa', 'yW', 'yV', 'yΩ', 'yT', 'yH', 'yF',
 ]
+
+# 겹치는 단위 있는지 체크
+assert len(__all__) == len(set(__all__))
