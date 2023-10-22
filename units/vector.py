@@ -17,7 +17,7 @@ class Vector:
 		if any(not isinstance(arg, int | float) for arg in args):
 			raise TypeError(f"Vector.__init__: {args}")
 		
-		self.__args = args
+		self.__args = tuple(map(float, args))
 	
 	@staticmethod
 	def polar(r, theta, phi=None) -> "Vector":
@@ -102,13 +102,13 @@ class Vector:
 			return NotImplemented
 	
 	def __radd__(self, other) -> "Vector":
-		return self.__add__(other)
+		return self + other
 	
 	def __sub__(self, other) -> "Vector":
-		return self.__add__(-other)
+		return self + (-other)
 	
 	def __rsub__(self, other) -> "Vector":
-		return -(self.__add__(-other))
+		return -(self - other)
 	
 	def __matmul__(self, other) -> float:
 		if isinstance(other, Vector):
@@ -139,13 +139,13 @@ class Vector:
 			return Vector(*[a * other for a in self.__args])
 		
 	def __rmul__(self, other) -> "Vector":
-		return -self.__mul__(other)
+		return self.__mul__(other)
 	
 	def __truediv__(self, other) -> "Vector":
 		if isinstance(other, Iterable | VecLike):
 			raise TypeError(f"Vector.__truediv__: {type(other)}")
 			
-		return self.__mul__(1 / other)
+		return self * other ** -1
 	
 	def __repr__(self) -> str:
 		return f"{self}"
