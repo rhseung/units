@@ -10,6 +10,8 @@ VecLike: TypeAlias = tuple
 class DimensionError(Exception):
 	pass
 
+# todo: _repr_latex_
+
 class Vector:
 	def __init__(self, *args: int | float):
 		if len(args) == 1 and isinstance(args[0], Vector):
@@ -32,7 +34,6 @@ class Vector:
 			return _content
 		else:
 			# return f"$\\begin{{bmatrix}} {_content} \\end{{bmatrix}}$"
-			# fixme: this is a temporary fix
 			return f"$\\mathrm{{ {_content} }}$"
 	
 	@property

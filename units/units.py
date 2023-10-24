@@ -44,8 +44,7 @@ class Prefix(Enum):
 class UnitError(Exception):
     pass
 
-# todo: 모든 클래스의 __eq__를 테스트해보자. 뭔가 양쪽에서 NotImplemented가 나오는 허점이 있을 것 같다.
-# todo: _repr_latex_ 구현하기
+# todo: _repr_latex_
 
 class UnitBase(ABC):
     def __init__(self):
@@ -99,6 +98,10 @@ class UnitBase(ABC):
     @property
     def scale(self) -> int | float | complex:
         return self._scale
+
+    @property
+    def counter(self) -> Counter:
+        return NotImplemented
 
 class Unit(UnitBase):
     _instances: dict[tuple[str, ScaleType], 'Unit'] = {}
@@ -184,7 +187,7 @@ class ComplexUnit(UnitBase):
     def __deepcopy__(self) -> "ComplexUnit":
         return self
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, ComplexUnit):
             return self._counter == other._counter
         else:
@@ -301,7 +304,7 @@ class DelayedUnit(Unit):
     def __hash__(self):
         return hash(self._symbol)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, DelayedUnit):
             return self._represent == other._represent
         else:
@@ -341,7 +344,7 @@ class PrefixUnit(Unit):
     def __hash__(self):
         return hash(self._symbol)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, PrefixUnit):
             return self._prefix == other._prefix and self._unit == other._unit
         else:
@@ -458,13 +461,23 @@ class Quantity:
 
     def __add__(self, other) -> "Quantity":
         if isinstance(other, Quantity):
-            # todo: PrefixUnit + Unit 은 Prefix가 작은 쪽으로 합쳐지도록
-            if self._unit.si().counter == other._unit.si().counter:
+            if self._unit == other._unit:
                 return Quantity(self._value + other._value, self._unit)
+            elif self._unit.si().counter == other._unit.si().counter:
+                if not (isinstance(self._unit, PrefixUnit) or isinstance(other._unit, PrefixUnit)):
+                    return NotImplemented
+
+                p1 = self._unit.prefix.value if isinstance(self._unit, PrefixUnit) else 1
+                p2 = other._unit.prefix.value if isinstance(other._unit, PrefixUnit) else 1
+
+                if p1 < p2:
+                    return Quantity(self._value + other._value * p2 / p1, self._unit)
+                else:
+                    return Quantity(self._value * p1 / p2 + other._value, other._unit)
             else:
-                raise UnitError(f"Cannot add {self._unit} and {other._unit}.")
+                return NotImplemented
         else:
-            return Quantity(self._value + other, self._unit)
+            return NotImplemented
 
     def __radd__(self, other) -> "Quantity":
         return self + other
@@ -476,7 +489,6 @@ class Quantity:
         return -self + other
 
     def __mul__(self, other) -> "Quantity":
-        # todo: 테스트
         if isinstance(other, Quantity):
             return Quantity(self._value * other._value, self._unit * other._unit)
         elif isinstance(other, VecLike):
@@ -508,6 +520,15 @@ class Quantity:
 
     def si(self):
         return Quantity(self._value, self._unit.si())
+
+    def to(self, unit: UnitBase) -> "Quantity":
+        a_si = self.unit.si()
+        b_si = unit.si()
+
+        if a_si.counter == b_si.counter:
+            return Quantity(self.value * a_si.scale / b_si.scale, unit)
+        else:
+            raise UnitError(f"Cannot convert {self.unit} to {unit}.")
 
     @property
     def value(self) -> ValueType:
