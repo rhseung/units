@@ -2,6 +2,7 @@ __all__ = ['Counter']
 
 from collections import UserDict
 from typing import TypeVar, Callable
+from functools import cmp_to_key
 
 T = TypeVar('T')
 class Counter(UserDict[T, float]):
@@ -13,7 +14,21 @@ class Counter(UserDict[T, float]):
 	
 	def map_to_list(self, f: Callable[[T, float], any]) -> list[any]:
 		return [f(key, value) for key, value in self.items()]
-	
+
+	def items(self):
+		# A-Z-a-z
+		def compare(a, b):
+			a, b = a[0], b[0]		# (symbol, value) -> symbol
+
+			if a.symbol.isupper() and b.symbol.isupper():
+				return a.symbol < b.symbol
+			elif a.symbol.islower() and b.symbol.islower():
+				return a.symbol < b.symbol
+			else:
+				return a.symbol.isupper()
+
+		return sorted(super().items(), key=cmp_to_key(compare), reverse=True)
+
 	def __pos__(self) -> "Counter":
 		return self.copy()
 	

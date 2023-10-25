@@ -12,7 +12,7 @@ def to_int_if_possible(value: float) -> int | float:
 def unit(fmt: str | int | float) -> 'UnitBase':
     if isinstance(fmt, str):
         try:
-            return Unit._instances[fmt]
+            return Unit._instances[fmt, 1]
         except KeyError:
             return Unit(fmt)
     elif isinstance(fmt, int | float):
@@ -83,6 +83,18 @@ class UnitBase(ABC):
     def __str__(self) -> str:
         return self.__repr__()
 
+    def to(self, unit: 'UnitBase') -> 'UnitBase':
+        _si_a = self.si()
+        _si_b = unit.si()
+
+        if _si_a.elements == _si_b.elements:
+            if _si_a.scale == _si_b.scale:
+                return unit
+            else:
+                return ComplexUnit(unit.elements, _si_a.scale / _si_b.scale)
+        else:
+            return NotImplemented
+
     @abstractmethod
     def represent(self) -> 'Unit | ComplexUnit':
         return NotImplemented
@@ -100,7 +112,7 @@ class UnitBase(ABC):
         return self._scale
 
     @property
-    def counter(self) -> Counter:
+    def elements(self) -> Counter:
         return NotImplemented
 
 class Unit(UnitBase):
@@ -127,38 +139,38 @@ class Unit(UnitBase):
         return self
 
     def __hash__(self):
-        return hash(self._symbol)
+        return hash(self.symbol)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Unit):
-            return self._symbol == other._symbol
+            return self.symbol == other.symbol
         else:
             return NotImplemented
 
     def __pow__(self, power: int | float) -> 'ComplexUnit':
-        new_counter = Counter({self: float(power)})
+        new_elements = Counter({self: float(power)})
         # power가 0이면 Counter가 알아서 지워줌
 
-        return ComplexUnit(new_counter, self.scale ** power)
+        return ComplexUnit(new_elements, self.scale ** power)
 
     def __mul__(self, other) -> 'ComplexUnit':
         ret = super(Unit, self).__mul__(other)
         if ret is not NotImplemented:
             return ret
 
-        new_counter = Counter({self: 1})
+        new_elements = Counter({self: 1})
 
         if isinstance(other, Unit):
-            new_counter += {other: 1}
+            new_elements += {other: 1}
         elif isinstance(other, ComplexUnit):
-            new_counter += other.counter
+            new_elements += other.elements
         else:
             return NotImplemented
 
-        return ComplexUnit(new_counter, self.scale * other.scale)
+        return ComplexUnit(new_elements, self.scale * other.scale)
 
     def __repr__(self) -> str:
-        return self._symbol
+        return self.symbol
 
     def represent(self) -> 'ComplexUnit | Unit':
         return self
@@ -167,14 +179,14 @@ class Unit(UnitBase):
         return self
 
     def one(self) -> 'Unit':
-        return Unit(self._symbol, 1)
+        return Unit(self.symbol, 1)
 
     @property
     def symbol(self):
         return self._symbol
 
     @property
-    def counter(self) -> Counter:
+    def elements(self) -> Counter:
         return Counter({self: 1})
 
 class ComplexUnit(UnitBase):
@@ -182,40 +194,40 @@ class ComplexUnit(UnitBase):
         super().__init__()
 
         self._scale = scale
-        self._counter: Counter[Unit] = elements or Counter({})
+        self._elements: Counter[Unit] = elements or Counter({})
 
     def __deepcopy__(self) -> "ComplexUnit":
         return self
 
     def __eq__(self, other) -> bool:
         if isinstance(other, ComplexUnit):
-            return self._counter == other._counter
+            return self.elements == other.elements
         else:
             return NotImplemented
 
     def __pow__(self, power: int | float) -> 'ComplexUnit':
-        new_counter = self._counter.map(lambda p: p * power)
+        new_elements = self.elements.map(lambda p: p * power)
 
-        return ComplexUnit(new_counter, self._scale ** power)
+        return ComplexUnit(new_elements, self.scale ** power)
 
     def __mul__(self, other) -> 'Unit | ComplexUnit | Quantity':
         ret = super(ComplexUnit, self).__mul__(other)
         if ret is not NotImplemented:
             return ret
 
-        new_counter = self._counter.copy()
+        new_elements = self.elements.copy()
 
         if isinstance(other, Unit):
-            new_counter += {other: 1}
+            new_elements += {other: 1}
         elif isinstance(other, ComplexUnit):
-            new_counter += other._counter
+            new_elements += other.elements
         else:
             raise TypeError(f"ComplexUnit.__mul__: {type(other)}")
 
-        if len(new_counter) == 1 and self._scale == 1:
-            return next(iter(new_counter))
+        if len(new_elements) == 1 and self.scale == 1:
+            return next(iter(new_elements))
         else:
-            return ComplexUnit(new_counter, self._scale * other.scale)
+            return ComplexUnit(new_elements, self.scale * other.scale)
 
     def __repr__(self) -> str:
         if self.is_dimensionless():
@@ -224,7 +236,7 @@ class ComplexUnit(UnitBase):
             slash = ['', '']
             dot_sep, pow_sep = '*', '**'
 
-            for _u, _p in self._counter.items():
+            for _u, _p in self.elements.items():
                 _p = to_int_if_possible(_p)
 
                 if abs(_p) == 1:
@@ -237,8 +249,8 @@ class ComplexUnit(UnitBase):
             text = slash[0].rstrip(dot_sep) + ('' if not slash[1] else '/' + slash[1].rstrip(dot_sep))
             txt = f"{text}"
 
-        if self._scale != 1:
-            txt += f" with scale {self._scale}"
+        if self.scale != 1:
+            txt += f" with scale {self.scale}"
 
         return txt
 
@@ -247,13 +259,13 @@ class ComplexUnit(UnitBase):
             return self
 
         ret = None
-        for unit, power in self._counter.items():
+        for unit, power in self.elements.items():
             if ret is None:
                 ret = unit.represent() ** power
             else:
                 ret *= unit.represent() ** power
 
-        return ComplexUnit(ret.counter, self._scale * ret.scale)
+        return ComplexUnit(ret.elements, self.scale * ret.scale)
 
     def si(self) -> 'ComplexUnit | Unit':
         if self.is_dimensionless():
@@ -263,7 +275,7 @@ class ComplexUnit(UnitBase):
         # N .si * J .si
 
         ret = None
-        for unit, power in self._counter.items():
+        for unit, power in self.elements.items():
             # unit의 타입으로 올 수 있는 것은 Unit, AbbreviateUnit, PrefixUnit
             #  - Unit: si()가 Unit을 반환하므로 문제 없음.
             #  - AbbreviateUnit: si()가 ComplexUnit.si() 를 사용하므로 이 함수와 동일.
@@ -275,17 +287,17 @@ class ComplexUnit(UnitBase):
             else:
                 ret *= unit.si() ** power
 
-        return ComplexUnit(ret.counter, self._scale * ret.scale)
+        return ComplexUnit(ret.elements, self.scale * ret.scale)
 
     def is_dimensionless(self) -> bool:
-        return len(self._counter) == 0
+        return len(self.elements) == 0
 
     def one(self) -> 'ComplexUnit':
-        return ComplexUnit(self._counter, 1)
+        return ComplexUnit(self.elements, 1)
 
     @property
-    def counter(self):
-        return self._counter
+    def elements(self):
+        return self._elements
 
 class DelayedUnit(Unit):
     def __new__(cls, symbol: str, represent: ComplexUnit, scale: ScaleType = 1):
@@ -302,7 +314,7 @@ class DelayedUnit(Unit):
         self._represent = represent
 
     def __hash__(self):
-        return hash(self._symbol)
+        return hash(self.symbol)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, DelayedUnit):
@@ -317,7 +329,7 @@ class DelayedUnit(Unit):
         return self._represent.si()
 
     def one(self) -> 'DelayedUnit':
-        return DelayedUnit(self._symbol, self._represent, 1)
+        return DelayedUnit(self.symbol, self._represent, 1)
 
 class PrefixUnit(Unit):
     def __new__(cls, prefix: Prefix, unit: Unit, scale: ScaleType = 1):
@@ -342,18 +354,18 @@ class PrefixUnit(Unit):
         self._unit = unit
 
     def __hash__(self):
-        return hash(self._symbol)
+        return hash(self.symbol)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, PrefixUnit):
-            return self._prefix == other._prefix and self._unit == other._unit
+            return self.prefix == other.prefix and self.unit == other.unit
         else:
             return NotImplemented
 
     def __lt__(self, other):
-        if self._unit != other:
+        if self.unit != other:
             raise UnitError("PrefixUnit.__lt__: Cannot compare different units.")
-        return self._unit == other and self._prefix.value < 1
+        return self.unit == other and self._prefix.value < 1
 
     def __ge__(self, other):
         return not self < other
@@ -365,23 +377,27 @@ class PrefixUnit(Unit):
         return self != other and self >= other
 
     def represent(self) -> ComplexUnit:
-        return ComplexUnit(Counter({self._unit: 1}), self._prefix.value)
+        return ComplexUnit(Counter({self.unit: 1}), self._prefix.value)
 
     def si(self) -> ComplexUnit:
-        _si = self._unit.si()
+        _si = self.unit.si()
 
         # self._prefix가 1인 경우는 Unit을 반환할 수도 있으나, Prefix 중에 1e0인 것은 없으므로 항상 ComplexUnit을 반환한다.
         if isinstance(_si, Unit):
             return ComplexUnit(Counter({_si: 1}), self._prefix.value * _si.scale)
         else:  # ComplexUnit
-            return ComplexUnit(_si.counter, self._prefix.value * _si.scale)
+            return ComplexUnit(_si.elements, self._prefix.value * _si.scale)
 
     def one(self) -> 'PrefixUnit':
-        return PrefixUnit(self._prefix, self._unit, 1)
+        return PrefixUnit(self.prefix, self.unit, 1)
 
     @property
-    def prefix(self):
+    def prefix(self) -> Prefix:
         return self._prefix
+
+    @property
+    def unit(self) -> Unit:
+        return self._unit
 
 class Quantity:
     def __init__(self, value: ValueType, unit: UnitBase):
@@ -389,25 +405,25 @@ class Quantity:
         self._unit = unit.one()
 
     def __iter__(self):
-        if isinstance(self._value, Vector):
-            yield from self._value
+        if isinstance(self.value, Vector):
+            yield from self.value
         else:
-            yield self._value
+            yield self.value
 
     def __bool__(self):
-        return bool(self._value)
+        return bool(self.value)
 
     def __len__(self):
-        if isinstance(self._value, Vector):
-            return len(self._value)
+        if isinstance(self.value, Vector):
+            return len(self.value)
         else:
             return 1
 
     def __abs__(self):
-        return Quantity(abs(self._value), self._unit)
+        return Quantity(abs(self.value), self.unit)
 
     def __format__(self, format_spec):
-        return f"{self._value:{format_spec}} [{self._unit}]"
+        return f"{self.value:{format_spec}} [{self.unit}]"
 
     def __repr__(self) -> str:
         return self.__format__('')
@@ -419,30 +435,30 @@ class Quantity:
         return self
 
     def __neg__(self) -> "Quantity":
-        return Quantity(-self._value, self._unit)
+        return Quantity(-self.value, self.unit)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Quantity):
-            if self._value == other._value:  # 값과 단위 모두가 같아야 같은 Quantity, 그러나 값이 0이면 단위가 달라도 동일
-                return self._unit == other._unit if self._value != 0 else True
+            if self.value == other.value:  # 값과 단위 모두가 같아야 같은 Quantity, 그러나 값이 0이면 단위가 달라도 동일
+                return self.unit == other.unit if self.value != 0 else True
         elif isinstance(other, ValueType):  # 0은 단위가 없든 있든 동일.
-            return self._value == 0 and other == 0
+            return self.value == 0 and other == 0
         elif isinstance(other, UnitBase):
-            self_si = self._unit.si()
+            self_si = self.unit.si()
             other_si = other.si()
 
-            return self_si.counter == other_si.counter and self._value * self_si.scale == other_si.scale
+            return self_si.elements == other_si.elements and self.value * self_si.scale == other_si.scale
         else:
             return NotImplemented
 
     def __lt__(self, other) -> bool:
         if isinstance(other, Quantity):
-            if self._unit.si() == other._unit.si():
-                return self._value < other._value
+            if self.unit.si() == other.unit.si():
+                return self.value < other.value
             else:
-                raise UnitError(f"Cannot compare {self._unit} and {other._unit}.")
+                raise UnitError(f"Cannot compare {self.unit} and {other.unit}.")
         else:
-            return self._value < other
+            return self.value < other
 
     def __ge__(self, other) -> bool:
         return not self < other
@@ -455,25 +471,25 @@ class Quantity:
 
     def __pow__(self, other) -> "Quantity":
         if isinstance(other, int | float):
-            return Quantity(self._value ** other, self._unit ** other)
+            return Quantity(self.value ** other, self.unit ** other)
         else:
             return NotImplemented
 
     def __add__(self, other) -> "Quantity":
         if isinstance(other, Quantity):
-            if self._unit == other._unit:
-                return Quantity(self._value + other._value, self._unit)
-            elif self._unit.si().counter == other._unit.si().counter:
-                if not (isinstance(self._unit, PrefixUnit) or isinstance(other._unit, PrefixUnit)):
-                    return NotImplemented
+            if self.unit == other.unit:
+                return Quantity(self.value + other.value, self.unit)
 
-                p1 = self._unit.prefix.value if isinstance(self._unit, PrefixUnit) else 1
-                p2 = other._unit.prefix.value if isinstance(other._unit, PrefixUnit) else 1
+            _si_a = self.unit.si()
+            _si_b = other.unit.si()
+            if _si_a.elements == _si_b.elements:
+                _scale1 = self.unit.prefix.value if isinstance(self.unit, PrefixUnit) else _si_a.scale
+                _scale2 = other.unit.prefix.value if isinstance(other.unit, PrefixUnit) else _si_b.scale
 
-                if p1 < p2:
-                    return Quantity(self._value + other._value * p2 / p1, self._unit)
+                if _scale1 < _scale2:
+                    return Quantity(self.value + other.value * _scale2 / _scale1, self.unit)
                 else:
-                    return Quantity(self._value * p1 / p2 + other._value, other._unit)
+                    return Quantity(self.value * _scale1 / _scale2 + other.value, other.unit)
             else:
                 return NotImplemented
         else:
@@ -490,11 +506,11 @@ class Quantity:
 
     def __mul__(self, other) -> "Quantity":
         if isinstance(other, Quantity):
-            return Quantity(self._value * other._value, self._unit * other._unit)
+            return Quantity(self.value * other.value, self.unit * other.unit)
         elif isinstance(other, VecLike):
-            return Quantity(self._value * Vector(*other), self._unit)
+            return Quantity(self.value * Vector(*other), self.unit)
         elif isinstance(other, ValueType):
-            return Quantity(self._value * other, self._unit)
+            return Quantity(self.value * other, self.unit)
         elif isinstance(other, Iterable):
             return type(other)([self * v for v in other])
         else:
@@ -510,23 +526,23 @@ class Quantity:
         return self ** -1 * other
 
     def is_vector(self, unit: Unit = None) -> bool:
-        return isinstance(self._value, Vector) and (unit is None or self.unit == unit)
+        return isinstance(self.value, Vector) and (unit is None or self.unit == unit)
 
     def is_scalar(self, unit: Unit = None) -> bool:
         return not self.is_vector() and (unit is None or self.unit == unit)
 
     def represent(self):
-        return Quantity(self._value, self._unit.represent())
+        return Quantity(self.value, self.unit.represent())
 
     def si(self):
-        return Quantity(self._value, self._unit.si())
+        return Quantity(self.value, self.unit.si())
 
     def to(self, unit: UnitBase) -> "Quantity":
-        a_si = self.unit.si()
-        b_si = unit.si()
+        _si_a = self.unit.si()
+        _si_b = unit.si()
 
-        if a_si.counter == b_si.counter:
-            return Quantity(self.value * a_si.scale / b_si.scale, unit)
+        if _si_a.elements == _si_b.elements:
+            return Quantity(self.value, self.unit.to(unit))
         else:
             raise UnitError(f"Cannot convert {self.unit} to {unit}.")
 
@@ -540,7 +556,7 @@ class Quantity:
 
     @property
     def e(self) -> tuple['Quantity', ...]:
-        return tuple(v * self.unit for v in self._value)
+        return tuple(v * self.unit for v in self.value)
 
 kg = Unit('kg')
 m = Unit('m')
