@@ -2,12 +2,16 @@ from .vector import *
 from .utils import Counter
 from abc import ABC, abstractmethod
 from enum import Enum
+from functools import cmp_to_key
 
 ScaleType = int | float | complex
 ValueType = ScaleType | Vector
 
-def to_int_if_possible(value: float) -> int | float:
-    return int(value) if value.is_integer() else value
+def to_int_if_possible(value: int | float) -> int | float:
+    if isinstance(value, int):
+        return value
+    else:
+        return int(value) if value.is_integer() else value
 
 def unit(fmt: str | int | float) -> 'UnitBase':
     if isinstance(fmt, str):
@@ -16,9 +20,24 @@ def unit(fmt: str | int | float) -> 'UnitBase':
         except KeyError:
             return Unit(fmt)
     elif isinstance(fmt, int | float):
-        return ComplexUnit(Counter({}), fmt)
+        return ComplexUnit(Counter(), fmt)
     else:
         raise TypeError(f"unit: {type(fmt)}")
+
+def cmp(a_: 'Unit', b_: 'Unit'):
+    a, b = a_.symbol, b_.symbol
+    l_a, l_b = len(a), len(b)
+
+    if a == b:
+        return 0
+    elif a.isupper() and b.islower():  # 대문자가 소문자보다 우선
+        return -1
+    elif a.islower() and b.isupper():  # 대문자가 소문자보다 우선
+        return 1
+    elif l_a != l_b:    # 길이가 짧은 것이 뒤로 밀림
+        return -1 if l_a > l_b else 1
+    else:   # 길이도 같고, 대소문자 여부도 동일한 상태는 사전 순
+        return -1 if a < b else 1
 
 class Prefix(Enum):
     Y = 1e24
@@ -152,7 +171,7 @@ class Unit(UnitBase):
             return NotImplemented
 
     def __pow__(self, power: int | float) -> 'ComplexUnit':
-        new_elements = Counter({self: float(power)})
+        new_elements = Counter((self, power))
         # power가 0이면 Counter가 알아서 지워줌
 
         return ComplexUnit(new_elements, self.scale ** power)
@@ -162,10 +181,10 @@ class Unit(UnitBase):
         if ret is not NotImplemented:
             return ret
 
-        new_elements = Counter({self: 1})
+        new_elements = Counter((self, 1))
 
         if isinstance(other, Unit):
-            new_elements += {other: 1}
+            new_elements += Counter((other, 1))
         elif isinstance(other, ComplexUnit):
             new_elements += other.elements
         else:
@@ -180,7 +199,7 @@ class Unit(UnitBase):
         if get:
             return self.__repr__()
         else:
-            return r'\mathrm {' + self.__repr__() + '}'
+            return r'$\mathrm {' + self.__repr__() + '}$'
 
     def represent(self) -> 'ComplexUnit | Unit':
         return self
@@ -197,14 +216,14 @@ class Unit(UnitBase):
 
     @property
     def elements(self) -> Counter:
-        return Counter({self: 1})
+        return Counter((self, 1))
 
 class ComplexUnit(UnitBase):
     def __init__(self, elements: Counter[Unit] = None, scale: int | float | complex = 1):
         super().__init__()
 
         self._scale = scale
-        self._elements: Counter[Unit] = elements or Counter({})
+        self._elements: Counter[Unit] = elements or Counter()
 
     def __deepcopy__(self) -> "ComplexUnit":
         return self
@@ -246,8 +265,8 @@ class ComplexUnit(UnitBase):
             slash = ['', '']
             dot_sep, pow_sep = '*', '**'
 
-            for _u, _p in self.elements.items():
-                _p = to_int_if_possible(_p)
+            for _u in sorted(list(self.elements.keys()), key=cmp_to_key(cmp)):
+                _p = to_int_if_possible(self.elements[_u])
 
                 if abs(_p) == 1:
                     slash[_p < 0] += f'{_u.symbol}{dot_sep}'
@@ -271,17 +290,19 @@ class ComplexUnit(UnitBase):
             return r'$\mathrm {' + self.__repr__().replace('**', '^').replace('*', r' \cdot ') + '}$'
 
     def represent(self) -> 'ComplexUnit':
-        if self.is_dimensionless():
-            return self
+        return NotImplemented
 
-        ret = None
-        for unit, power in self.elements.items():
-            if ret is None:
-                ret = unit.represent() ** power
-            else:
-                ret *= unit.represent() ** power
-
-        return ComplexUnit(ret.elements, self.scale * ret.scale)
+        # if self.is_dimensionless():
+        #     return self
+        #
+        # ret = None
+        # for _u, _p in self.elements.items():
+        #     if ret is None:
+        #         ret = _u.represent() ** _p
+        #     else:
+        #         ret *= _u.represent() ** _p
+        #
+        # return ComplexUnit(ret.elements, self.scale * ret.scale)
 
     def si(self) -> 'ComplexUnit | Unit':
         if self.is_dimensionless():
@@ -291,7 +312,8 @@ class ComplexUnit(UnitBase):
         # N .si * J .si
 
         ret = None
-        for unit, power in self.elements.items():
+        for _u in sorted(list(self.elements.keys()), key=cmp_to_key(cmp)):
+            _p = to_int_if_possible(self.elements[_u])
             # unit의 타입으로 올 수 있는 것은 Unit, AbbreviateUnit, PrefixUnit
             #  - Unit: si()가 Unit을 반환하므로 문제 없음.
             #  - AbbreviateUnit: si()가 ComplexUnit.si() 를 사용하므로 이 함수와 동일.
@@ -299,9 +321,9 @@ class ComplexUnit(UnitBase):
 
             # 계속 재귀 돌려서 Counter의 첫 번째 Unit이 Unit 타입(상속 말고)이 될 때까지 반복
             if ret is None:
-                ret = unit.si() ** power
+                ret = _u.si() ** _p
             else:
-                ret *= unit.si() ** power
+                ret *= _u.si() ** _p
 
         return ComplexUnit(ret.elements, self.scale * ret.scale)
 
@@ -393,14 +415,14 @@ class PrefixUnit(Unit):
         return self != other and self >= other
 
     def represent(self) -> ComplexUnit:
-        return ComplexUnit(Counter({self.unit: 1}), self._prefix.value)
+        return ComplexUnit(Counter((self.unit, 1)), self._prefix.value)
 
     def si(self) -> ComplexUnit:
         _si = self.unit.si()
 
         # self._prefix가 1인 경우는 Unit을 반환할 수도 있으나, Prefix 중에 1e0인 것은 없으므로 항상 ComplexUnit을 반환한다.
         if isinstance(_si, Unit):
-            return ComplexUnit(Counter({_si: 1}), self._prefix.value * _si.scale)
+            return ComplexUnit(Counter((_si, 1)), self._prefix.value * _si.scale)
         else:  # ComplexUnit
             return ComplexUnit(_si.elements, self._prefix.value * _si.scale)
 
@@ -464,7 +486,7 @@ class Quantity:
         else:
             _value = str(to_int_if_possible(self.value))
 
-        return r'$\mathrm {' + f"{_value} \;\, {self.unit._repr_latex_(get=True)}" + '}$'
+        return r'$\mathrm {' + f"{_value} \\;\\, {self.unit._repr_latex_(get=True)}" + '}$'
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -605,12 +627,12 @@ mol = Unit('mol')
 cd = Unit('cd')
 rad = Unit('rad')
 
-g = DelayedUnit('g', ComplexUnit(Counter({kg: 1}), 1e-3))
+g = DelayedUnit('g', ComplexUnit(Counter((kg, 1)), 1e-3))
 N = DelayedUnit('N', kg * m / s ** 2)
 J = DelayedUnit('J', N * m)
 Pa = DelayedUnit('Pa', N / m ** 2)
 W = DelayedUnit('W', J / s)
-atm = DelayedUnit('atm', ComplexUnit(Counter({Pa: 1}), 101325.))
+atm = DelayedUnit('atm', ComplexUnit(Counter((Pa, 1)), 101325.))
 C = DelayedUnit('C', A * s)
 V = DelayedUnit('V', J / C)
 Ω = DelayedUnit('Ω', V / A)
@@ -623,9 +645,9 @@ prefix_variants = [g, m, s, A, K, mol, cd, N, J, Pa, W, V, Ω, T, H, F]
 
 for _p in Prefix:
     if _p == Prefix.m:
-        globals()['milli'] = ComplexUnit(Counter({}), _p.value)
+        globals()['milli'] = ComplexUnit(Counter(), _p.value)
     else:
-        globals()[_p.name] = ComplexUnit(Counter({}), _p.value)
+        globals()[_p.name] = ComplexUnit(Counter(), _p.value)
 
     for _u in prefix_variants:
         if _p == Prefix.k and _u == g:

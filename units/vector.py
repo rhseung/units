@@ -7,8 +7,11 @@ from typing import TypeAlias
 Iterable: TypeAlias = list | ndarray
 VecLike: TypeAlias = tuple
 
-def to_int_if_possible(value: float) -> int | float:
-    return int(value) if value.is_integer() else value
+def to_int_if_possible(value: int | float) -> int | float:
+    if isinstance(value, int):
+        return value
+    else:
+        return int(value) if value.is_integer() else value
 
 # todo: _repr_latex_
 
@@ -34,10 +37,10 @@ class Vector:
 	
 	def _repr_latex_(self, get=False) -> str:
 		if get:
-			return r'(' + ',\,'.join(map(lambda x: str(to_int_if_possible(x)), self.__args)) + r')'
+			return r'(' + r',\,'.join(map(lambda x: str(to_int_if_possible(x)), self.__args)) + r')'
 		else:
 			return r"$\begin{pmatrix} " + r'\\'.join(map(lambda x: str(to_int_if_possible(x)), self.__args)) + r" \end{pmatrix}$"
-	
+
 	@property
 	def dim(self) -> int:
 		return len(self.__args)
