@@ -83,6 +83,10 @@ class UnitBase(ABC):
     def __str__(self) -> str:
         return self.__repr__()
 
+    @abstractmethod
+    def _repr_latex_(self, get=False) -> str:
+        return NotImplemented
+
     def to(self, unit: 'UnitBase') -> 'UnitBase':
         _si_a = self.si()
         _si_b = unit.si()
@@ -172,6 +176,12 @@ class Unit(UnitBase):
     def __repr__(self) -> str:
         return self.symbol
 
+    def _repr_latex_(self, get=False) -> str:
+        if get:
+            return self.__repr__()
+        else:
+            return r'\mathrm {' + self.__repr__() + '}'
+
     def represent(self) -> 'ComplexUnit | Unit':
         return self
 
@@ -253,6 +263,12 @@ class ComplexUnit(UnitBase):
             txt += f" with scale {self.scale}"
 
         return txt
+
+    def _repr_latex_(self, get=False) -> str:
+        if get:
+            return self.__repr__().replace('**', '^').replace('*', r' \cdot ')
+        else:
+            return r'$\mathrm {' + self.__repr__().replace('**', '^').replace('*', r' \cdot ') + '}$'
 
     def represent(self) -> 'ComplexUnit':
         if self.is_dimensionless():
@@ -427,6 +443,28 @@ class Quantity:
 
     def __repr__(self) -> str:
         return self.__format__('')
+
+    def _repr_latex_(self) -> str:
+        if isinstance(self.value, Vector):
+            _value = self.value._repr_latex_(get=True)
+        elif isinstance(self.value, complex):
+            _front, _end = '', ''
+            if self.value.real != 0:
+                _front = str(to_int_if_possible(self.value.real))
+            if self.value.imag != 0:
+                _end = str(to_int_if_possible(self.value.imag)) + r' \textit{i}'
+            
+            if self.value.real != 0 and self.value.imag != 0:   # 실수부, 허수부 둘 중 하나라도 0이면 괄호 안 씀
+                _value = '(' + _front + ' + ' + _end + ')'
+            else:
+                if _front + _end:
+                    _value = _front + _end
+                else:
+                    _value = '0'
+        else:
+            _value = str(to_int_if_possible(self.value))
+
+        return r'$\mathrm {' + f"{_value} \;\, {self.unit._repr_latex_(get=True)}" + '}$'
 
     def __str__(self) -> str:
         return self.__repr__()

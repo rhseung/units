@@ -7,10 +7,14 @@ from typing import TypeAlias
 Iterable: TypeAlias = list | ndarray
 VecLike: TypeAlias = tuple
 
-class DimensionError(Exception):
-	pass
+def to_int_if_possible(value: float) -> int | float:
+    return int(value) if value.is_integer() else value
 
 # todo: _repr_latex_
+
+class DimensionError(Exception):
+	def __init__(self, expected: int | str, input: int | str, subject: str = "self"):
+		super().__init__(f"DimensionError: `{subject}` expected {str(expected) + 'd' if isinstance(expected, int) else expected}, but input is {str(input) + 'd' if isinstance(input, int) else input}")
 
 class Vector:
 	def __init__(self, *args: int | float):
@@ -29,12 +33,10 @@ class Vector:
 			return Vector(r*sin(theta)*cos(phi), r**sin(theta)*sin(phi), r*cos(theta))
 	
 	def _repr_latex_(self, get=False) -> str:
-		_content = '\\\\'.join(map(str, self.__args))
 		if get:
-			return _content
+			return r'(' + ',\,'.join(map(lambda x: str(to_int_if_possible(x)), self.__args)) + r')'
 		else:
-			# return f"$\\begin{{bmatrix}} {_content} \\end{{bmatrix}}$"
-			return f"$\\mathrm{{ {_content} }}$"
+			return r"$\begin{pmatrix} " + r'\\'.join(map(lambda x: str(to_int_if_possible(x)), self.__args)) + r" \end{pmatrix}$"
 	
 	@property
 	def dim(self) -> int:
@@ -46,15 +48,24 @@ class Vector:
 	
 	@property
 	def i(self) -> float:
-		return self.__args[0]
+		if self.dim >= 1:
+			return self.__args[0]
+		else:
+			raise DimensionError(expected='>= 1d', input=self.dim)
 	
 	@property
 	def j(self) -> float:
-		return self.__args[1]
+		if self.dim >= 2:
+			return self.__args[1]
+		else:
+			raise DimensionError(expected='>= 2d', input=self.dim)
 	
 	@property
 	def k(self) -> float:
-		return self.__args[2]
+		if self.dim >= 3:
+			return self.__args[2]
+		else:
+			raise DimensionError(expected='>= 3d', input=self.dim)
 	
 	@property
 	def r(self) -> float:
@@ -67,14 +78,14 @@ class Vector:
 		elif self.dim == 3:
 			return atan2((self.i**2 + self.j**2) ** 0.5, self.k)
 		else:
-			raise DimensionError(f"input: {len(self)}, expected: 2")
+			raise DimensionError(expected=2, input=self.dim)
 	
 	@property
 	def phi(self) -> float:
 		if self.dim == 3:
 			return atan2(self.j, self.i)
 		else:
-			raise DimensionError(f"input: {len(self)}, expected: 3")
+			raise DimensionError(expected=3, input=self.dim)
 	
 	def __abs__(self) -> float:
 		return self.r
@@ -90,13 +101,13 @@ class Vector:
 	
 	def __add__(self, other) -> "Vector":
 		if isinstance(other, Vector):
-			if len(self) != len(other):
-				raise ValueError(f"Vector.__add__: {len(self)} != {len(other)}")
+			if self.dim != other.dim:
+				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
 			
 			return Vector(*[a + b for a, b in zip(self.__args, other.__args)])
 		elif isinstance(other, Iterable):
-			if len(self) != len(other):
-				raise ValueError(f"Vector.__add__: {len(self)} != {len(other)}")
+			if self.dim != other.dim:
+				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
 			
 			return Vector(*[a + b for a, b in zip(self.__args, other)])
 		else:
@@ -113,8 +124,8 @@ class Vector:
 	
 	def __matmul__(self, other) -> float:
 		if isinstance(other, Vector):
-			if len(self) != len(other):
-				raise ValueError(f"Vector.__matmul__: {len(self)} != {len(other)}")
+			if self.dim != other.dim:
+				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
 			
 			return sum(a * b for a, b in zip(self.__args, other.__args))
 		else:
@@ -126,7 +137,7 @@ class Vector:
 	def __mul__(self, other) -> "Vector":
 		if isinstance(other, Vector):
 			if self.dim != other.dim:
-				raise ValueError(f"Vector.__mul__: {self.dim} != {other.dim}")
+				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
 			
 			if self.dim == 3:
 				return Vector(
@@ -135,7 +146,7 @@ class Vector:
 					other.j * self.i - other.i * self.j
 				)
 			else:
-				raise DimensionError(f"Vector.__mul__: {self.dim}")
+				raise DimensionError(expected=3, input=self.dim)
 		else:
 			return Vector(*[a * other for a in self.__args])
 		
@@ -157,7 +168,7 @@ class Vector:
 	def __format__(self, format_spec) -> str:
 		if format_spec.endswith('p'):  # polar coordinates
 			if self.dim not in (2, 3):
-				raise DimensionError(f"Vector.__format__: {self.dim}")
+				raise DimensionError(expected='2d or 3d', input=self.dim)
 			
 			options = '{:' + format_spec[:-1] + '}'
 			text = [options.format(self.r), options.format(self.theta)]
@@ -197,7 +208,7 @@ class Vector:
 			raise TypeError
 		
 		if self.dim != other.dim:
-			raise DimensionError
+			raise DimensionError(subject='other', expected=self.dim, input=other.dim)
 		
 		return abs(self) < abs(other)
 
@@ -223,4 +234,4 @@ class Vector:
 		if self.dim == 2:
 			return complex(self.i, self.j)
 		else:
-			raise DimensionError(f"input: {len(self)}, expected: 2")
+			raise DimensionError(expected=2, input=self.dim)
