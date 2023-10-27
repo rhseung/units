@@ -1,5 +1,5 @@
 __all__ = [
-    'unit',
+    'unit', 'expand', 'si',
 
     'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
     'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω',
@@ -111,6 +111,12 @@ def value_to_latex(value: ValueType) -> str:
     _value = find_exp.sub(simplify_exp, _value)
 
     return _value
+
+def to_unit_if_possible(x: 'ComplexUnit') -> 'ComplexUnit | Unit':
+    if len(x.elements) == 1 and x.scale == 1 and all(v == 1 for v in x.elements.values()):
+        return next(iter(x.elements))
+    else:
+        return x
 
 class Prefix(Enum):
     Y = 1e24
@@ -284,7 +290,7 @@ class Unit(UnitBase):
     def one(self) -> 'Unit':
         return Unit(self.symbol, 1)
 
-    def represent(self) -> 'Unit | ComplexUnit':
+    def expand(self) -> 'Unit | ComplexUnit':
         return self
 
     @property
@@ -330,10 +336,10 @@ class ComplexUnit(UnitBase):
         else:
             raise TypeError(f"ComplexUnit.__mul__: {type(other)}")
 
-        if len(new_elements) == 1 and self.scale == 1 and all(v == 1 for v in new_elements.values()):
-            return next(iter(new_elements))
-        else:
-            return ComplexUnit(new_elements, self.scale * other.scale)
+        ret = ComplexUnit(new_elements, self.scale * other.scale)
+
+        # test.
+        return to_unit_if_possible(ret)
 
     def __repr__(self) -> str:
         if self.is_dimensionless():
@@ -385,9 +391,9 @@ class ComplexUnit(UnitBase):
         # ret = None
         # for _u, _p in self.elements.items():
         #     if ret is None:
-        #         ret = _u.represent() ** _p
+        #         ret = _u.expand() ** _p
         #     else:
-        #         ret *= _u.represent() ** _p
+        #         ret *= _u.expand() ** _p
         #
         # return ComplexUnit(ret.elements, self.scale * ret.scale)
 
@@ -398,13 +404,13 @@ class ComplexUnit(UnitBase):
         # N*J .si
         # N .si * J .si
 
-        ret = None
+        ret: ComplexUnit | Unit = None
         for _u in sorted(list(self.elements.keys()), key=cmp_to_key(unit_sort_key)):
             _p = to_int_if_possible(self.elements[_u])
-            # unit의 타입으로 올 수 있는 것은 Unit, AbbreviateUnit, PrefixUnit
+            # unit의 타입으로 올 수 있는 것은 Unit, DelayedUnit, PrefixUnit
             #  - Unit: si()가 Unit을 반환하므로 문제 없음.
-            #  - AbbreviateUnit: si()가 ComplexUnit.si() 를 사용하므로 이 함수와 동일.
-            #  - PrefixUnit: si()가 Unit.si() 또는 AbbreviateUnit.si() 를 사용하므로 문제 없거나 이 함수와 동일.
+            #  - DelayedUnit: si()가 ComplexUnit.si() 를 사용하므로 이 함수와 동일.
+            #  - PrefixUnit: si()가 Unit.si() 또는 DelayedUnit.si() 를 사용하므로 문제 없거나 이 함수와 동일.
 
             # 계속 재귀 돌려서 Counter의 첫 번째 Unit이 Unit 타입(상속 말고)이 될 때까지 반복
             if ret is None:
@@ -412,7 +418,10 @@ class ComplexUnit(UnitBase):
             else:
                 ret *= _u.si() ** _p
 
-        return ComplexUnit(ret.elements, self.scale * ret.scale)
+        ret = ComplexUnit(ret.elements, self.scale * ret.scale)
+
+        # test.
+        return to_unit_if_possible(ret)
 
     def is_dimensionless(self) -> bool:
         return len(self.elements) == 0
@@ -425,7 +434,7 @@ class ComplexUnit(UnitBase):
         return self._elements
 
 class DelayedUnit(Unit):
-    def __new__(cls, symbol: str, represent: ComplexUnit, scale: ValueType = 1):
+    def __new__(cls, symbol: str, expand: ComplexUnit, scale: ValueType = 1):
         if (symbol, scale) in cls._instances:
             return cls._instances[symbol, scale]
 
@@ -434,27 +443,27 @@ class DelayedUnit(Unit):
             cls._instances[symbol, scale] = instance
         return instance
 
-    def __init__(self, symbol: str, represent: ComplexUnit, scale: ValueType = 1):
+    def __init__(self, symbol: str, expand: ComplexUnit, scale: ValueType = 1):
         super().__init__(symbol, scale)
-        self._represent = represent
+        self._expand = expand
 
     def __hash__(self):
         return hash(self.symbol)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, DelayedUnit):
-            return self._represent == other._represent
+            return self._expand == other._expand
         else:
             return NotImplemented
 
     def expand(self) -> ComplexUnit:
-        return self._represent
+        return self._expand
 
     def si(self) -> ComplexUnit | Unit:
-        return self._represent.si()
+        return self._expand.si()
 
     def one(self) -> 'DelayedUnit':
-        return DelayedUnit(self.symbol, self._represent, 1)
+        return DelayedUnit(self.symbol, self._expand, 1)
 
 class PrefixUnit(Unit):
     def __new__(cls, prefix: Prefix, unit: Unit, scale: ValueType = 1):
@@ -531,6 +540,8 @@ class Quantity:
 
         if isinstance(self._value, int | float):
             self._value = to_int_if_possible(self._value)
+        elif isinstance(self._value, Vector) and self._value.dim == 1:  # 1차원 벡터는 스칼라
+            self._value = to_int_if_possible(self._value.e[0])
 
     def __iter__(self):
         if isinstance(self.value, Vector):
@@ -575,30 +586,32 @@ class Quantity:
     def __eq__(self, other) -> bool:
         # todo: 2*km == 2000*1000*mm
         if isinstance(other, Quantity):
-            if self.value == other.value:  # 값과 단위 모두가 같아야 같은 Quantity, 그러나 값이 0이면 단위가 달라도 동일
-                return self.unit == other.unit if self.value != 0 else True
-        elif isinstance(other, ValueType):  # 0은 단위가 없든 있든 동일.
-            return self.value == 0 and other == 0
-        elif isinstance(other, UnitBase):
-            self_si = self.unit.si()
-            other_si = other.si()
-
-            return self_si.elements == other_si.elements and self.value * self_si.scale == other_si.scale
+            if self.value == other.value:
+                return self.unit == other.unit if self.value != 0 else True     # 값이 0이면 단위는 무시됨
+            else:
+                _si_a, _si_b = self.si(), other.si()
+                return _si_a.value == _si_b.value and _si_a.unit == _si_b.unit
+        elif isinstance(other, ValueType) and self.unit.is_dimensionless():  # dimensionless는 ValueType과 비교 가능
+            return self.value == other
         else:
             return NotImplemented
 
     def __lt__(self, other) -> bool:
         # todo: 3*km > 2000*1000*mm
         if isinstance(other, Quantity):
-            _si_a = self.si()
-            _si_b = other.si()
-
-            if _si_a == _si_b:
-                return _si_a.scale * self.value < _si_b.scale * other.value
+            if self.unit == other.unit:
+                return self.value < other.value
             else:
-                raise UnitError(f"Cannot compare {self.unit} and {other.unit}.")
-        else:
+                _si_a, _si_b = self.si(), other.si()
+
+                if _si_a.unit == _si_b.unit:
+                    return _si_a.value < _si_b.value
+                else:
+                    raise UnitError(f"Cannot compare {self.unit} and {other.unit}.")
+        elif isinstance(other, ValueType) and self.unit.is_dimensionless():  # dimensionless는 ValueType과 비교 가능
             return self.value < other
+        else:
+            return NotImplemented
 
     def __ge__(self, other) -> bool:
         return not self < other
@@ -672,7 +685,7 @@ class Quantity:
     def is_scalar(self, unit: Unit = None) -> bool:
         return not self.is_vector() and (unit is None or self.unit == unit)
 
-    def represent(self):
+    def expand(self):
         return Quantity(self.value, self.unit.expand())
 
     def si(self):
