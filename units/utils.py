@@ -4,14 +4,16 @@ from math import cos, sin, atan2
 from collections import UserDict
 from typing import TypeVar, TypeAlias, Callable, Tuple, Dict
 
-def to_int_if_possible(value: int | float) -> int | float:
+ValueType: TypeAlias = int | float
+VecLike: TypeAlias = tuple
+
+def to_int_if_possible(value: ValueType) -> ValueType:
 	if isinstance(value, int):
 		return value
 	else:
 		return int(value) if value.is_integer() else value
 
 T = TypeVar('T')
-
 class Counter(UserDict[T, float]):
 	def __init__(self, *args: Tuple[T, float], raw_dict: Dict[T, float] = None):
 		if raw_dict is not None:
@@ -43,7 +45,7 @@ class Counter(UserDict[T, float]):
 		elif isinstance(other, dict):
 			return self + Counter(raw_dict=other)
 		else:
-			return NotImplemented
+			raise TypeError(type(other))
 
 	def __sub__(self, other) -> "Counter":
 		if isinstance(other, Counter):
@@ -51,7 +53,7 @@ class Counter(UserDict[T, float]):
 		elif isinstance(other, dict):
 			return self - Counter(raw_dict=other)
 		else:
-			return NotImplemented
+			raise TypeError(type(other))
 
 class DimensionError(Exception):
 	def __init__(self, expected: int | str, input: int | str, subject: str = "self"):
@@ -59,15 +61,15 @@ class DimensionError(Exception):
 			f"DimensionError: `{subject}` expected {str(expected) + 'd' if isinstance(expected, int) else expected}, but input is {str(input) + 'd' if isinstance(input, int) else input}")
 
 class Vector:
-	def __init__(self, *args: int | float, raw_vector: "Vector" = None):
+	def __init__(self, *args: ValueType, raw_vector: "Vector" = None):
 		self._args: Tuple = None
 
 		if raw_vector is not None:
 			self._args = raw_vector._args
-		elif any(not isinstance(arg, int | float) for arg in args):
+		elif any(not isinstance(arg, ValueType) for arg in args):
 			raise TypeError(f"Vector.__init__: {args}")
 		else:
-			self._args = tuple(map(float, args))
+			self._args = tuple(map(to_int_if_possible, args))
 
 	@staticmethod
 	def polar(r, theta, phi=None) -> "Vector":
@@ -154,7 +156,7 @@ class Vector:
 			_other = Vector(*other)
 			return self + _other
 		else:
-			return NotImplemented
+			raise TypeError(type(other))
 
 	def __radd__(self, other) -> "Vector":
 		return self + other
@@ -165,7 +167,7 @@ class Vector:
 	def __rsub__(self, other) -> "Vector":
 		return -(self - other)
 
-	def __matmul__(self, other) -> float:
+	def __mul__(self, other) -> "Vector | float":
 		if isinstance(other, Vector):
 			if self.dim != other.dim:
 				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
@@ -173,14 +175,16 @@ class Vector:
 			return sum(a * b for a, b in zip(self._args, other._args))
 		elif isinstance(other, VecLike):
 			_other = Vector(*other)
-			return self @ _other
+			return self * _other
+		elif isinstance(other, ValueType):		# 스칼라 곱
+			return Vector(*((v * other) for v in self))
 		else:
-			return NotImplemented
+			raise TypeError(type(other))
 
-	def __rmatmul__(self, other) -> float:
-		return self @ other
+	def __rmul__(self, other) -> "Vector | float":
+		return self * other
 
-	def __mul__(self, other) -> "Vector":
+	def __matmul__(self, other) -> "Vector":
 		if isinstance(other, Vector):
 			if self.dim != other.dim:
 				raise DimensionError(subject='other', expected=self.dim, input=other.dim)
@@ -195,12 +199,12 @@ class Vector:
 				raise DimensionError(expected=3, input=self.dim)
 		elif isinstance(other, VecLike):
 			_other = Vector(*other)
-			return self * _other
+			return self @ _other
 		else:
-			return NotImplemented
+			raise TypeError(type(other))
 
-	def __rmul__(self, other) -> "Vector":
-		return self * other
+	def __rmatmul__(self, other) -> "Vector":
+		return self @ other
 
 	def __truediv__(self, other) -> "Vector":
 		return self * other ** -1
@@ -253,7 +257,7 @@ class Vector:
 			_other = Vector(*other)
 			return self == _other
 		else:
-			raise NotImplemented
+			raise TypeError(type(other))
 
 	def __lt__(self, other) -> bool:
 		if isinstance(other, Vector):
@@ -265,7 +269,7 @@ class Vector:
 			_other = Vector(*other)
 			return self < _other
 		else:
-			raise NotImplemented
+			raise TypeError(type(other))
 
 	def __le__(self, other):
 		return self == other or self < other
@@ -290,5 +294,3 @@ class Vector:
 			return complex(self.i, self.j)
 		else:
 			raise DimensionError(expected=2, input=self.dim)
-
-VecLike: TypeAlias = tuple

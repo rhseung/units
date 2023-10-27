@@ -2,13 +2,13 @@ __all__ = [
     'unit', 'expand', 'si',
 
     'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
-    'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω',
+    'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω', 'Wb', 'T', 'H', 'F',
 
     'Y', 'Yg', 'Ym', 'Ys', 'YA', 'YK', 'Ymol', 'Ycd', 'YN', 'YJ', 'YPa', 'YW', 'YV', 'YΩ', 'YT', 'YH', 'YF',
     'Z', 'Zg', 'Zm', 'Zs', 'ZA', 'ZK', 'Zmol', 'Zcd', 'ZN', 'ZJ', 'ZPa', 'ZW', 'ZV', 'ZΩ', 'ZT', 'ZH', 'ZF',
     'E', 'Eg', 'Em', 'Es', 'EA', 'EK', 'Emol', 'Ecd', 'EN', 'EJ', 'EPa', 'EW', 'EV', 'EΩ', 'ET', 'EH', 'EF',
     'P', 'Pg', 'Pm', 'Ps', 'PA', 'PK', 'Pmol', 'Pcd', 'PN', 'PJ', 'PPa', 'PW', 'PV', 'PΩ', 'PT', 'PH', 'PF',
-    'T', 'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'TN', 'TJ', 'TPa', 'TW', 'TV', 'TΩ', 'TT', 'TH', 'TF',
+    'Tera', 'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'TN', 'TJ', 'TPa', 'TW', 'TV', 'TΩ', 'TT', 'TH', 'TF',
     'G', 'Gg', 'Gm', 'Gs', 'GA', 'GK', 'Gmol', 'Gcd', 'GN', 'GJ', 'GPa', 'GW', 'GV', 'GΩ', 'GT', 'GH', 'GF',
     'M', 'Mg', 'Mm', 'Ms', 'MA', 'MK', 'Mmol', 'Mcd', 'MN', 'MJ', 'MPa', 'MW', 'MV', 'MΩ', 'MT', 'MH', 'MF',
     'k', 'kg', 'km', 'ks', 'kA', 'kK', 'kmol', 'kcd', 'kN', 'kJ', 'kPa', 'kW', 'kV', 'kΩ', 'kT', 'kH', 'kF',
@@ -24,7 +24,7 @@ __all__ = [
     'z', 'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zN', 'zJ', 'zPa', 'zW', 'zV', 'zΩ', 'zT', 'zH', 'zF',
     'y', 'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yN', 'yJ', 'yPa', 'yW', 'yV', 'yΩ', 'yT', 'yH', 'yF',
 ]
-assert len(__all__) == len(set(__all__))
+assert len(__all__) == len(set(__all__))    # 겹치는 단위 있나 체크
 
 from .utils import *
 from abc import ABC, abstractmethod
@@ -48,13 +48,11 @@ def unit(fmt: str | int | float) -> 'UnitBase':
     else:
         raise TypeError(f"unit: {type(fmt)}")
 
-def expand(x):
-    # todo: .expand()
-    ...
+def expand(x: 'UnitBase | Quantity') -> 'UnitBase | Quantity':
+    return x.expand()
 
-def si(x):
-    # todo: .si()
-    ...
+def si(x: 'UnitBase | Quantity') -> 'UnitBase | Quantity':
+    return x.si()
 
 def unit_sort_key(a_: 'Unit', b_: 'Unit'):
     a, b = a_.symbol, b_.symbol
@@ -97,17 +95,26 @@ def value_to_latex(value: ValueType) -> str:
         # 4e-0 -> 4e0
         # 4e+0 -> 4e0
         # 4e-04 -> 4 \times 10^{-4}
+        # 1e+04 -> 10^{4}
+        # -1e+04 -> -10^{4}
 
-        sign, exp = match.groups()
+        base, sign, exp = match.groups()
 
         if sign == '+':
             exp = exp.lstrip('0') or '0'
         else:  # sign == '-'
             exp = sign + (exp.lstrip('0') or '0')
 
-        return f" \\times 10^{{{exp}}}"
+        if base == '1':
+            front = ''
+        elif base == '-1':
+            front = '-'
+        else:
+            front = f"{base} \\times "
 
-    find_exp = re.compile('e([+-]?)([0-9.]+)')
+        return f"{front}10^{{{exp}}}"
+
+    find_exp = re.compile('([0-9.]+)e([+-]?)([0-9.]+)')
     _value = find_exp.sub(simplify_exp, _value)
 
     return _value
@@ -341,8 +348,8 @@ class ComplexUnit(UnitBase):
         # test.
         return to_unit_if_possible(ret)
 
-    def __repr__(self) -> str:
-        if self.is_dimensionless():
+    def __repr__(self, ignore_scale=False) -> str:
+        if len(self.elements) == 0:
             txt = f"dimensionless"
         else:
             slash = ['', '']
@@ -361,7 +368,7 @@ class ComplexUnit(UnitBase):
             text = slash[0].rstrip(dot_sep) + ('' if not slash[1] else '/' + slash[1].rstrip(dot_sep))
             txt = f"{text}"
 
-        if self.scale != 1:
+        if self.scale != 1 and not ignore_scale:
             txt += f" with scale {self.scale}"
 
         return txt
@@ -372,8 +379,8 @@ class ComplexUnit(UnitBase):
             _scale = value_to_latex(self.scale)
 
         _unit = ''
-        if not self.is_dimensionless():
-            _unit = self.__repr__().replace('**', '^').replace('*', r' \cdot ')
+        if len(self.elements) != 0:
+            _unit = self.__repr__(ignore_scale=True).replace('**', '^').replace('*', r' \cdot ')
 
         _txt = (_scale + r' \;\, ' + _unit).strip(r'\;\, ')
 
@@ -398,11 +405,8 @@ class ComplexUnit(UnitBase):
         # return ComplexUnit(ret.elements, self.scale * ret.scale)
 
     def si(self) -> 'ComplexUnit | Unit':
-        if self.is_dimensionless():
+        if len(self.elements) == 0:
             return self
-
-        # N*J .si
-        # N .si * J .si
 
         ret: ComplexUnit | Unit = None
         for _u in sorted(list(self.elements.keys()), key=cmp_to_key(unit_sort_key)):
@@ -424,7 +428,8 @@ class ComplexUnit(UnitBase):
         return to_unit_if_possible(ret)
 
     def is_dimensionless(self) -> bool:
-        return len(self.elements) == 0
+        # 합치면 무차원이지만 여러 개의 단위가 곱해진 형태인 경우가 존재.
+        return len(self.si().elements) == 0
 
     def one(self) -> 'ComplexUnit':
         return ComplexUnit(self.elements, 1)
@@ -434,7 +439,7 @@ class ComplexUnit(UnitBase):
         return self._elements
 
 class DelayedUnit(Unit):
-    def __new__(cls, symbol: str, expand: ComplexUnit, scale: ValueType = 1):
+    def __new__(cls, symbol: str, represents: ComplexUnit, scale: ValueType = 1):
         if (symbol, scale) in cls._instances:
             return cls._instances[symbol, scale]
 
@@ -443,27 +448,27 @@ class DelayedUnit(Unit):
             cls._instances[symbol, scale] = instance
         return instance
 
-    def __init__(self, symbol: str, expand: ComplexUnit, scale: ValueType = 1):
+    def __init__(self, symbol: str, represents: ComplexUnit, scale: ValueType = 1):
         super().__init__(symbol, scale)
-        self._expand = expand
+        self._represents = represents
 
     def __hash__(self):
         return hash(self.symbol)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, DelayedUnit):
-            return self._expand == other._expand
+            return self._represents == other._represents
         else:
             return NotImplemented
 
     def expand(self) -> ComplexUnit:
-        return self._expand
+        return self._represents
 
     def si(self) -> ComplexUnit | Unit:
-        return self._expand.si()
+        return self._represents.si()
 
     def one(self) -> 'DelayedUnit':
-        return DelayedUnit(self.symbol, self._expand, 1)
+        return DelayedUnit(self.symbol, self._represents, 1)
 
 class PrefixUnit(Unit):
     def __new__(cls, prefix: Prefix, unit: Unit, scale: ValueType = 1):
@@ -543,6 +548,9 @@ class Quantity:
         elif isinstance(self._value, Vector) and self._value.dim == 1:  # 1차원 벡터는 스칼라
             self._value = to_int_if_possible(self._value.e[0])
 
+        if isinstance(self._unit, ComplexUnit):
+            self._unit = to_unit_if_possible(self._unit)
+
     def __iter__(self):
         if isinstance(self.value, Vector):
             yield from self.value
@@ -584,7 +592,6 @@ class Quantity:
         return Quantity(-self.value, self.unit)
 
     def __eq__(self, other) -> bool:
-        # todo: 2*km == 2000*1000*mm
         if isinstance(other, Quantity):
             if self.value == other.value:
                 return self.unit == other.unit if self.value != 0 else True     # 값이 0이면 단위는 무시됨
@@ -597,7 +604,6 @@ class Quantity:
             return NotImplemented
 
     def __lt__(self, other) -> bool:
-        # todo: 3*km > 2000*1000*mm
         if isinstance(other, Quantity):
             if self.unit == other.unit:
                 return self.value < other.value
@@ -629,21 +635,24 @@ class Quantity:
             return NotImplemented
 
     def __add__(self, other) -> "Quantity":
-        # todo: dimensionless 일 땐 ValueType와의 연산 가능
         if isinstance(other, Quantity):
             if self.unit == other.unit:
                 return Quantity(self.value + other.value, self.unit)
 
-            _si_a = self.unit.si()
-            _si_b = other.unit.si()
-            if _si_a.elements == _si_b.elements:
-                _scale1 = self.unit.prefix.value if isinstance(self.unit, PrefixUnit) else _si_a.scale
-                _scale2 = other.unit.prefix.value if isinstance(other.unit, PrefixUnit) else _si_b.scale
-
-                if _scale1 < _scale2:
-                    return Quantity(self.value + other.value * _scale2 / _scale1, self.unit)
+            _si_a, _si_b = self.si(), other.si()
+            if _si_a.unit.elements == _si_b.unit.elements:
+                # 접두사가 다른 단위들의 연산 고려, 크기가 작은 단위로 맞춰짐
+                if _si_a.value < _si_b.value:
+                    return self + other.to(self.unit)
                 else:
-                    return Quantity(self.value * _scale1 / _scale2 + other.value, other.unit)
+                    return self.to(other.unit) + other
+            else:
+                return NotImplemented
+        elif isinstance(other, VecLike):
+            return self + Vector(*other)
+        elif isinstance(other, ValueType):
+            if self.unit.is_dimensionless():
+                return Quantity(self.value + other, self.unit)
             else:
                 return NotImplemented
         else:
@@ -662,16 +671,42 @@ class Quantity:
         if isinstance(other, Quantity):
             return Quantity(self.value * other.value, self.unit * other.unit)
         elif isinstance(other, VecLike):
-            return Quantity(self.value * Vector(*other), self.unit)
+            return self * Vector(*other)
         elif isinstance(other, ValueType):
             return Quantity(self.value * other, self.unit)
-        elif isinstance(other, Iterable):
+        elif isinstance(other, Iterable):   # iterable한 객체는 broadcast
             return type(other)([self * v for v in other])
         else:
             return NotImplemented
 
     def __rmul__(self, other) -> "Quantity":
         return self * other
+
+    def __matmul__(self, other) -> "Quantity":
+        if isinstance(other, Quantity):
+            # 크로스곱은 두 벡터에 수직인 벡터를 찾는 것이므로 단위를 곱하는 개념이 아님. 같은 단위의 물리량만이 크로스곱이 가능
+            if self.unit == other.unit:
+                return Quantity(self.value @ other.value, self.unit)
+
+            _si_a, _si_b = self.si(), other.si()
+            if _si_a.unit.elements == _si_b.unit.elements:
+                if _si_a.value < _si_b.value:
+                    return self @ other.to(self.unit)
+                else:
+                    return self.to(other.unit) @ other
+            else:
+                return NotImplemented
+        elif isinstance(other, VecLike):
+            return self @ Vector(*other)
+        elif isinstance(other, ValueType):
+            return Quantity(self.value @ other, self.unit)
+        elif isinstance(other, Iterable):
+            return type(other)([self @ v for v in other])
+        else:
+            return NotImplemented
+
+    def __rmatmul__(self, other) -> "Quantity":
+        return self @ other
 
     def __truediv__(self, other) -> "Quantity":
         return self * other ** -1
@@ -740,6 +775,8 @@ prefix_variants = [g, m, s, A, K, mol, cd, N, J, Pa, W, V, Ω, T, H, F]
 for _p in Prefix:
     if _p == Prefix.m:
         globals()['milli'] = ComplexUnit(Counter(), _p.value)
+    elif _p == Prefix.T:
+        globals()['Tera'] = ComplexUnit(Counter(), _p.value)
     else:
         globals()[_p.name] = ComplexUnit(Counter(), _p.value)
 
