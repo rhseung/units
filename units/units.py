@@ -3,9 +3,10 @@ from .utils import Counter
 from abc import ABC, abstractmethod
 from enum import Enum
 from functools import cmp_to_key
+from typing import TypeAlias
+import re
 
-ScaleType = int | float | complex
-ValueType = ScaleType | Vector
+ValueType: TypeAlias = int | float | complex | Vector
 
 def to_int_if_possible(value: int | float) -> int | float:
     if isinstance(value, int):
@@ -24,7 +25,7 @@ def unit(fmt: str | int | float) -> 'UnitBase':
     else:
         raise TypeError(f"unit: {type(fmt)}")
 
-def cmp(a_: 'Unit', b_: 'Unit'):
+def unit_sort_key(a_: 'Unit', b_: 'Unit'):
     a, b = a_.symbol, b_.symbol
     l_a, l_b = len(a), len(b)
 
@@ -38,6 +39,47 @@ def cmp(a_: 'Unit', b_: 'Unit'):
         return -1 if l_a > l_b else 1
     else:   # 길이도 같고, 대소문자 여부도 동일한 상태는 사전 순
         return -1 if a < b else 1
+
+def value_to_latex(value: ValueType) -> str:
+    if isinstance(value, Vector):
+        _value = value._repr_latex_(get=True)
+    elif isinstance(value, complex):
+        _real, _imag = '', ''
+
+        if value.real != 0:
+            _real = str(to_int_if_possible(value.real))
+        if value.imag != 0:
+            _imag = str(to_int_if_possible(abs(value.imag))) + r' \textit{i}'     # i는 italic으로 표시
+
+        if value.real != 0 and value.imag != 0:     # a+bi -> (a + bi), a-bi -> (a - bi)
+            _value = '(' + _real + (' + ' if value.imag >= 0 else ' - ') + _imag + ')'
+        elif _real + _imag:     # a + 0i -> a, 0 + bi -> bi
+            _value = _real + _imag
+        else:   # 0 + 0i -> 0
+            _value = '0'
+    else:   # int, float
+        _value = str(to_int_if_possible(value))
+
+    def simplify_exp(match):
+        # 4e-04 -> 4e-4
+        # 4e+04 -> 4e4
+        # 4e-0 -> 4e0
+        # 4e+0 -> 4e0
+        # 4e-04 -> 4 \times 10^{-4}
+
+        sign, exp = match.groups()
+
+        if sign == '+':
+            exp = exp.lstrip('0') or '0'
+        else:  # sign == '-'
+            exp = sign + (exp.lstrip('0') or '0')
+
+        return f" \\times 10^{{{exp}}}"
+
+    find_exp = re.compile('e([+-]?)([0-9.]+)')
+    _value = find_exp.sub(simplify_exp, _value)
+
+    return _value
 
 class Prefix(Enum):
     Y = 1e24
@@ -63,11 +105,9 @@ class Prefix(Enum):
 class UnitError(Exception):
     pass
 
-# todo: _repr_latex_
-
 class UnitBase(ABC):
     def __init__(self):
-        self._scale: ScaleType = 1
+        self._scale: ValueType = 1
 
     @abstractmethod
     def __pow__(self, power: int | float) -> 'ComplexUnit':
@@ -118,6 +158,9 @@ class UnitBase(ABC):
         else:
             return NotImplemented
 
+    def is_dimensionless(self) -> bool:
+        return False
+
     @abstractmethod
     def represent(self) -> 'Unit | ComplexUnit':
         return NotImplemented
@@ -139,9 +182,9 @@ class UnitBase(ABC):
         return NotImplemented
 
 class Unit(UnitBase):
-    _instances: dict[tuple[str, ScaleType], 'Unit'] = {}
+    _instances: dict[tuple[str, ValueType], 'Unit'] = {}
 
-    def __new__(cls, symbol: str = '', scale: ScaleType = 1):
+    def __new__(cls, symbol: str = '', scale: ValueType = 1):
         if (symbol, scale) in cls._instances:
             return cls._instances[symbol, scale]
 
@@ -150,7 +193,7 @@ class Unit(UnitBase):
             cls._instances[symbol, scale] = instance
         return instance
 
-    def __init__(self, symbol: str = '', scale: ScaleType = 1):
+    def __init__(self, symbol: str = '', scale: ValueType = 1):
         super().__init__()
         if not symbol.isalpha():
             raise ValueError(f"Unit.__init__: '{symbol}' is not a valid unit.")
@@ -210,6 +253,9 @@ class Unit(UnitBase):
     def one(self) -> 'Unit':
         return Unit(self.symbol, 1)
 
+    def represent(self) -> 'Unit | ComplexUnit':
+        return self
+
     @property
     def symbol(self):
         return self._symbol
@@ -265,7 +311,7 @@ class ComplexUnit(UnitBase):
             slash = ['', '']
             dot_sep, pow_sep = '*', '**'
 
-            for _u in sorted(list(self.elements.keys()), key=cmp_to_key(cmp)):
+            for _u in sorted(list(self.elements.keys()), key=cmp_to_key(unit_sort_key)):
                 _p = to_int_if_possible(self.elements[_u])
 
                 if abs(_p) == 1:
@@ -284,10 +330,20 @@ class ComplexUnit(UnitBase):
         return txt
 
     def _repr_latex_(self, get=False) -> str:
+        _scale = ''
+        if self.scale != 1:
+            _scale = value_to_latex(self.scale)
+
+        _unit = ''
+        if not self.is_dimensionless():
+            _unit = self.__repr__().replace('**', '^').replace('*', r' \cdot ')
+
+        _txt = (_scale + r' \;\, ' + _unit).strip(r'\;\, ')
+
         if get:
-            return self.__repr__().replace('**', '^').replace('*', r' \cdot ')
+            return _txt
         else:
-            return r'$\mathrm {' + self.__repr__().replace('**', '^').replace('*', r' \cdot ') + '}$'
+            return r'$\mathrm {' + _txt + '}$'
 
     def represent(self) -> 'ComplexUnit':
         return NotImplemented
@@ -312,7 +368,7 @@ class ComplexUnit(UnitBase):
         # N .si * J .si
 
         ret = None
-        for _u in sorted(list(self.elements.keys()), key=cmp_to_key(cmp)):
+        for _u in sorted(list(self.elements.keys()), key=cmp_to_key(unit_sort_key)):
             _p = to_int_if_possible(self.elements[_u])
             # unit의 타입으로 올 수 있는 것은 Unit, AbbreviateUnit, PrefixUnit
             #  - Unit: si()가 Unit을 반환하므로 문제 없음.
@@ -338,7 +394,7 @@ class ComplexUnit(UnitBase):
         return self._elements
 
 class DelayedUnit(Unit):
-    def __new__(cls, symbol: str, represent: ComplexUnit, scale: ScaleType = 1):
+    def __new__(cls, symbol: str, represent: ComplexUnit, scale: ValueType = 1):
         if (symbol, scale) in cls._instances:
             return cls._instances[symbol, scale]
 
@@ -347,7 +403,7 @@ class DelayedUnit(Unit):
             cls._instances[symbol, scale] = instance
         return instance
 
-    def __init__(self, symbol: str, represent: ComplexUnit, scale: ScaleType = 1):
+    def __init__(self, symbol: str, represent: ComplexUnit, scale: ValueType = 1):
         super().__init__(symbol, scale)
         self._represent = represent
 
@@ -370,7 +426,7 @@ class DelayedUnit(Unit):
         return DelayedUnit(self.symbol, self._represent, 1)
 
 class PrefixUnit(Unit):
-    def __new__(cls, prefix: Prefix, unit: Unit, scale: ScaleType = 1):
+    def __new__(cls, prefix: Prefix, unit: Unit, scale: ValueType = 1):
         symbol = prefix.name + unit.symbol
         if symbol and (symbol, scale) in cls._instances:
             return cls._instances[symbol, scale]
@@ -380,7 +436,7 @@ class PrefixUnit(Unit):
             cls._instances[symbol, scale] = instance
         return instance
 
-    def __init__(self, prefix: Prefix, unit: Unit, scale: ScaleType = 1):
+    def __init__(self, prefix: Prefix, unit: Unit, scale: ValueType = 1):
         if isinstance(unit, PrefixUnit):  # unit은 상속된 Unit 말고, 오직 Unit만 올 수 있음.
             raise TypeError(f"PrefixUnit.__init__: {type(unit)}")
 
@@ -467,26 +523,11 @@ class Quantity:
         return self.__format__('')
 
     def _repr_latex_(self) -> str:
-        if isinstance(self.value, Vector):
-            _value = self.value._repr_latex_(get=True)
-        elif isinstance(self.value, complex):
-            _front, _end = '', ''
-            if self.value.real != 0:
-                _front = str(to_int_if_possible(self.value.real))
-            if self.value.imag != 0:
-                _end = str(to_int_if_possible(self.value.imag)) + r' \textit{i}'
-            
-            if self.value.real != 0 and self.value.imag != 0:   # 실수부, 허수부 둘 중 하나라도 0이면 괄호 안 씀
-                _value = '(' + _front + ' + ' + _end + ')'
-            else:
-                if _front + _end:
-                    _value = _front + _end
-                else:
-                    _value = '0'
-        else:
-            _value = str(to_int_if_possible(self.value))
+        _value = value_to_latex(self.value)
+        _unit = self.unit._repr_latex_(get=True)
+        _txt = (_value + r' \;\, ' + _unit).strip(r'\;\, ')
 
-        return r'$\mathrm {' + f"{_value} \\;\\, {self.unit._repr_latex_(get=True)}" + '}$'
+        return r'$\mathrm {' + _txt + '}$'
 
     def __str__(self) -> str:
         return self.__repr__()
