@@ -12,6 +12,7 @@ setup(
 	keywords=['units', 'physics', 'mathematics'],
 	python_requires='>=3.11',
 	package_data={},
-	zip_safe=False
+	zip_safe=False,
+	requires=['numpy'],
 )
 

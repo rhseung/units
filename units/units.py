@@ -1,18 +1,41 @@
-from .vector import *
-from .utils import Counter
+__all__ = [
+    'unit',
+
+    'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
+    'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω',
+
+    'Y', 'Yg', 'Ym', 'Ys', 'YA', 'YK', 'Ymol', 'Ycd', 'YN', 'YJ', 'YPa', 'YW', 'YV', 'YΩ', 'YT', 'YH', 'YF',
+    'Z', 'Zg', 'Zm', 'Zs', 'ZA', 'ZK', 'Zmol', 'Zcd', 'ZN', 'ZJ', 'ZPa', 'ZW', 'ZV', 'ZΩ', 'ZT', 'ZH', 'ZF',
+    'E', 'Eg', 'Em', 'Es', 'EA', 'EK', 'Emol', 'Ecd', 'EN', 'EJ', 'EPa', 'EW', 'EV', 'EΩ', 'ET', 'EH', 'EF',
+    'P', 'Pg', 'Pm', 'Ps', 'PA', 'PK', 'Pmol', 'Pcd', 'PN', 'PJ', 'PPa', 'PW', 'PV', 'PΩ', 'PT', 'PH', 'PF',
+    'T', 'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'TN', 'TJ', 'TPa', 'TW', 'TV', 'TΩ', 'TT', 'TH', 'TF',
+    'G', 'Gg', 'Gm', 'Gs', 'GA', 'GK', 'Gmol', 'Gcd', 'GN', 'GJ', 'GPa', 'GW', 'GV', 'GΩ', 'GT', 'GH', 'GF',
+    'M', 'Mg', 'Mm', 'Ms', 'MA', 'MK', 'Mmol', 'Mcd', 'MN', 'MJ', 'MPa', 'MW', 'MV', 'MΩ', 'MT', 'MH', 'MF',
+    'k', 'kg', 'km', 'ks', 'kA', 'kK', 'kmol', 'kcd', 'kN', 'kJ', 'kPa', 'kW', 'kV', 'kΩ', 'kT', 'kH', 'kF',
+    'h', 'hg', 'hm', 'hs', 'hA', 'hK', 'hmol', 'hcd', 'hN', 'hJ', 'hPa', 'hW', 'hV', 'hΩ', 'hT', 'hH', 'hF',
+    'd', 'dg', 'dm', 'ds', 'dA', 'dK', 'dmol', 'dcd', 'dN', 'dJ', 'dPa', 'dW', 'dV', 'dΩ', 'dT', 'dH', 'dF',
+    'c', 'cg', 'cm', 'cs', 'cA', 'cK', 'cmol', 'ccd', 'cN', 'cJ', 'cPa', 'cW', 'cV', 'cΩ', 'cT', 'cH', 'cF',
+    'milli', 'mg', 'mm', 'ms', 'mA', 'mK', 'mmol', 'mcd', 'mN', 'mJ', 'mPa', 'mW', 'mV', 'mΩ', 'mT', 'mH', 'mF',
+    'μ', 'μg', 'μm', 'μs', 'μA', 'μK', 'μmol', 'μcd', 'μN', 'μJ', 'μPa', 'μW', 'μV', 'μΩ', 'μT', 'μH', 'μF',
+    'n', 'ng', 'nm', 'ns', 'nA', 'nK', 'nmol', 'ncd', 'nN', 'nJ', 'nPa', 'nW', 'nV', 'nΩ', 'nT', 'nH', 'nF',
+    'p', 'pg', 'pm', 'ps', 'pA', 'pK', 'pmol', 'pcd', 'pN', 'pJ', 'pPa', 'pW', 'pV', 'pΩ', 'pT', 'pH', 'pF',
+    'f', 'fg', 'fm', 'fs', 'fA', 'fK', 'fmol', 'fcd', 'fN', 'fJ', 'fPa', 'fW', 'fV', 'fΩ', 'fT', 'fH', 'fF',
+    'a', 'ag', 'am', 'as', 'aA', 'aK', 'amol', 'acd', 'aN', 'aJ', 'aPa', 'aW', 'aV', 'aΩ', 'aT', 'aH', 'aF',
+    'z', 'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zN', 'zJ', 'zPa', 'zW', 'zV', 'zΩ', 'zT', 'zH', 'zF',
+    'y', 'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yN', 'yJ', 'yPa', 'yW', 'yV', 'yΩ', 'yT', 'yH', 'yF',
+]
+assert len(__all__) == len(set(__all__))
+
+from .utils import *
 from abc import ABC, abstractmethod
 from enum import Enum
 from functools import cmp_to_key
 from typing import TypeAlias
+from numpy import ndarray
 import re
 
 ValueType: TypeAlias = int | float | complex | Vector
-
-def to_int_if_possible(value: int | float) -> int | float:
-    if isinstance(value, int):
-        return value
-    else:
-        return int(value) if value.is_integer() else value
+Iterable: TypeAlias = list | ndarray
 
 def unit(fmt: str | int | float) -> 'UnitBase':
     if isinstance(fmt, str):
@@ -24,6 +47,14 @@ def unit(fmt: str | int | float) -> 'UnitBase':
         return ComplexUnit(Counter(), fmt)
     else:
         raise TypeError(f"unit: {type(fmt)}")
+
+def expand(x):
+    # todo: .expand()
+    ...
+
+def si(x):
+    # todo: .si()
+    ...
 
 def unit_sort_key(a_: 'Unit', b_: 'Unit'):
     a, b = a_.symbol, b_.symbol
@@ -162,7 +193,7 @@ class UnitBase(ABC):
         return False
 
     @abstractmethod
-    def represent(self) -> 'Unit | ComplexUnit':
+    def expand(self) -> 'Unit | ComplexUnit':
         return NotImplemented
 
     @abstractmethod
@@ -244,7 +275,7 @@ class Unit(UnitBase):
         else:
             return r'$\mathrm {' + self.__repr__() + '}$'
 
-    def represent(self) -> 'ComplexUnit | Unit':
+    def expand(self) -> 'ComplexUnit | Unit':
         return self
 
     def si(self) -> 'ComplexUnit | Unit':
@@ -299,7 +330,7 @@ class ComplexUnit(UnitBase):
         else:
             raise TypeError(f"ComplexUnit.__mul__: {type(other)}")
 
-        if len(new_elements) == 1 and self.scale == 1:
+        if len(new_elements) == 1 and self.scale == 1 and all(v == 1 for v in new_elements.values()):
             return next(iter(new_elements))
         else:
             return ComplexUnit(new_elements, self.scale * other.scale)
@@ -345,7 +376,7 @@ class ComplexUnit(UnitBase):
         else:
             return r'$\mathrm {' + _txt + '}$'
 
-    def represent(self) -> 'ComplexUnit':
+    def expand(self) -> 'ComplexUnit':
         return NotImplemented
 
         # if self.is_dimensionless():
@@ -416,7 +447,7 @@ class DelayedUnit(Unit):
         else:
             return NotImplemented
 
-    def represent(self) -> ComplexUnit:
+    def expand(self) -> ComplexUnit:
         return self._represent
 
     def si(self) -> ComplexUnit | Unit:
@@ -470,7 +501,7 @@ class PrefixUnit(Unit):
     def __gt__(self, other):
         return self != other and self >= other
 
-    def represent(self) -> ComplexUnit:
+    def expand(self) -> ComplexUnit:
         return ComplexUnit(Counter((self.unit, 1)), self._prefix.value)
 
     def si(self) -> ComplexUnit:
@@ -495,8 +526,11 @@ class PrefixUnit(Unit):
 
 class Quantity:
     def __init__(self, value: ValueType, unit: UnitBase):
-        self._value = value * unit.scale
-        self._unit = unit.one()
+        self._value: ValueType = value * unit.scale
+        self._unit: UnitBase = unit.one()
+
+        if isinstance(self._value, int | float):
+            self._value = to_int_if_possible(self._value)
 
     def __iter__(self):
         if isinstance(self.value, Vector):
@@ -539,6 +573,7 @@ class Quantity:
         return Quantity(-self.value, self.unit)
 
     def __eq__(self, other) -> bool:
+        # todo: 2*km == 2000*1000*mm
         if isinstance(other, Quantity):
             if self.value == other.value:  # 값과 단위 모두가 같아야 같은 Quantity, 그러나 값이 0이면 단위가 달라도 동일
                 return self.unit == other.unit if self.value != 0 else True
@@ -553,9 +588,13 @@ class Quantity:
             return NotImplemented
 
     def __lt__(self, other) -> bool:
+        # todo: 3*km > 2000*1000*mm
         if isinstance(other, Quantity):
-            if self.unit.si() == other.unit.si():
-                return self.value < other.value
+            _si_a = self.si()
+            _si_b = other.si()
+
+            if _si_a == _si_b:
+                return _si_a.scale * self.value < _si_b.scale * other.value
             else:
                 raise UnitError(f"Cannot compare {self.unit} and {other.unit}.")
         else:
@@ -577,6 +616,7 @@ class Quantity:
             return NotImplemented
 
     def __add__(self, other) -> "Quantity":
+        # todo: dimensionless 일 땐 ValueType와의 연산 가능
         if isinstance(other, Quantity):
             if self.unit == other.unit:
                 return Quantity(self.value + other.value, self.unit)
@@ -633,7 +673,7 @@ class Quantity:
         return not self.is_vector() and (unit is None or self.unit == unit)
 
     def represent(self):
-        return Quantity(self.value, self.unit.represent())
+        return Quantity(self.value, self.unit.expand())
 
     def si(self):
         return Quantity(self.value, self.unit.si())
@@ -695,33 +735,3 @@ for _p in Prefix:
             continue
 
         globals()[_p.name + _u.symbol] = PrefixUnit(_p, _u)
-
-__all__ = [
-    'unit',
-
-    'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
-    'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω',
-
-    'Y', 'Yg', 'Ym', 'Ys', 'YA', 'YK', 'Ymol', 'Ycd', 'YN', 'YJ', 'YPa', 'YW', 'YV', 'YΩ', 'YT', 'YH', 'YF',
-    'Z', 'Zg', 'Zm', 'Zs', 'ZA', 'ZK', 'Zmol', 'Zcd', 'ZN', 'ZJ', 'ZPa', 'ZW', 'ZV', 'ZΩ', 'ZT', 'ZH', 'ZF',
-    'E', 'Eg', 'Em', 'Es', 'EA', 'EK', 'Emol', 'Ecd', 'EN', 'EJ', 'EPa', 'EW', 'EV', 'EΩ', 'ET', 'EH', 'EF',
-    'P', 'Pg', 'Pm', 'Ps', 'PA', 'PK', 'Pmol', 'Pcd', 'PN', 'PJ', 'PPa', 'PW', 'PV', 'PΩ', 'PT', 'PH', 'PF',
-    'T', 'Tg', 'Tm', 'Ts', 'TA', 'TK', 'Tmol', 'Tcd', 'TN', 'TJ', 'TPa', 'TW', 'TV', 'TΩ', 'TT', 'TH', 'TF',
-    'G', 'Gg', 'Gm', 'Gs', 'GA', 'GK', 'Gmol', 'Gcd', 'GN', 'GJ', 'GPa', 'GW', 'GV', 'GΩ', 'GT', 'GH', 'GF',
-    'M', 'Mg', 'Mm', 'Ms', 'MA', 'MK', 'Mmol', 'Mcd', 'MN', 'MJ', 'MPa', 'MW', 'MV', 'MΩ', 'MT', 'MH', 'MF',
-    'k', 'kg', 'km', 'ks', 'kA', 'kK', 'kmol', 'kcd', 'kN', 'kJ', 'kPa', 'kW', 'kV', 'kΩ', 'kT', 'kH', 'kF',
-    'h', 'hg', 'hm', 'hs', 'hA', 'hK', 'hmol', 'hcd', 'hN', 'hJ', 'hPa', 'hW', 'hV', 'hΩ', 'hT', 'hH', 'hF',
-    'd', 'dg', 'dm', 'ds', 'dA', 'dK', 'dmol', 'dcd', 'dN', 'dJ', 'dPa', 'dW', 'dV', 'dΩ', 'dT', 'dH', 'dF',
-    'c', 'cg', 'cm', 'cs', 'cA', 'cK', 'cmol', 'ccd', 'cN', 'cJ', 'cPa', 'cW', 'cV', 'cΩ', 'cT', 'cH', 'cF',
-    'milli', 'mg', 'mm', 'ms', 'mA', 'mK', 'mmol', 'mcd', 'mN', 'mJ', 'mPa', 'mW', 'mV', 'mΩ', 'mT', 'mH', 'mF',
-    'μ', 'μg', 'μm', 'μs', 'μA', 'μK', 'μmol', 'μcd', 'μN', 'μJ', 'μPa', 'μW', 'μV', 'μΩ', 'μT', 'μH', 'μF',
-    'n', 'ng', 'nm', 'ns', 'nA', 'nK', 'nmol', 'ncd', 'nN', 'nJ', 'nPa', 'nW', 'nV', 'nΩ', 'nT', 'nH', 'nF',
-    'p', 'pg', 'pm', 'ps', 'pA', 'pK', 'pmol', 'pcd', 'pN', 'pJ', 'pPa', 'pW', 'pV', 'pΩ', 'pT', 'pH', 'pF',
-    'f', 'fg', 'fm', 'fs', 'fA', 'fK', 'fmol', 'fcd', 'fN', 'fJ', 'fPa', 'fW', 'fV', 'fΩ', 'fT', 'fH', 'fF',
-    'a', 'ag', 'am', 'as', 'aA', 'aK', 'amol', 'acd', 'aN', 'aJ', 'aPa', 'aW', 'aV', 'aΩ', 'aT', 'aH', 'aF',
-    'z', 'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zN', 'zJ', 'zPa', 'zW', 'zV', 'zΩ', 'zT', 'zH', 'zF',
-    'y', 'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yN', 'yJ', 'yPa', 'yW', 'yV', 'yΩ', 'yT', 'yH', 'yF',
-]
-
-# 겹치는 단위 있는지 체크
-assert len(__all__) == len(set(__all__))

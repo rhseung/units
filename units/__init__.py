@@ -1,4 +1,4 @@
 from .units import *
-from .vector import *
+import numpy as np
 
-__version__ = '0.1.2'
+__version__ = '0.2'
