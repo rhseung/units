@@ -1,5 +1,14 @@
+from .utils import *
+from abc import ABC, abstractmethod
+from enum import Enum
+from functools import cmp_to_key
+from typing import TypeAlias
+from numpy import ndarray
+from copy import copy
+import re
+
 __all__ = [
-    'unit', 'expand', 'si',
+    'expand', 'si',
 
     'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',
     'N', 'J', 'Pa', 'W', 'atm', 'C', 'V', 'Ω', 'Wb', 'T', 'H', 'F',
@@ -24,19 +33,11 @@ __all__ = [
     'z', 'zg', 'zm', 'zs', 'zA', 'zK', 'zmol', 'zcd', 'zN', 'zJ', 'zPa', 'zW', 'zV', 'zΩ', 'zT', 'zH', 'zF',
     'y', 'yg', 'ym', 'ys', 'yA', 'yK', 'ymol', 'ycd', 'yN', 'yJ', 'yPa', 'yW', 'yV', 'yΩ', 'yT', 'yH', 'yF',
 ]
-assert len(__all__) == len(set(__all__))    # 겹치는 단위 있나 체크
-
-from .utils import *
-from abc import ABC, abstractmethod
-from enum import Enum
-from functools import cmp_to_key
-from typing import TypeAlias, Callable
-from numpy import ndarray
-from copy import copy, deepcopy
-import re
+assert len(__all__) == len(set(__all__))  # 겹치는 단위 있나 체크
 
 ValueType: TypeAlias = int | float | complex | Vector
-Broadcastable: TypeAlias = list | ndarray
+Iterable: TypeAlias = list | ndarray
+
 
 def unit(fmt: str | int | float) -> 'UnitBase':
     if isinstance(fmt, str):
@@ -49,11 +50,14 @@ def unit(fmt: str | int | float) -> 'UnitBase':
     else:
         raise TypeError(f"unit: {type(fmt)}")
 
+
 def expand(x: 'UnitBase | Quantity') -> 'UnitBase | Quantity':
     return x.expand()
 
+
 def si(x: 'UnitBase | Quantity') -> 'UnitBase | Quantity':
     return x.si()
+
 
 def unit_sort_key(a_: 'Unit', b_: 'Unit'):
     a, b = a_.symbol, b_.symbol
@@ -63,14 +67,15 @@ def unit_sort_key(a_: 'Unit', b_: 'Unit'):
 
     if a == b:
         return 0
-    elif l_a != l_b:    # 길이가 짧은 것이 뒤로 밀림
+    elif l_a != l_b:  # 길이가 짧은 것이 뒤로 밀림
         return -1 if l_a > l_b else 1
     elif a.isupper() and b.islower():  # 대문자가 소문자보다 우선
         return -1
     elif a.islower() and b.isupper():  # 대문자가 소문자보다 우선
         return 1
-    else:   # 길이도 같고, 대소문자 여부도 동일한 상태는 사전 순
+    else:  # 길이도 같고, 대소문자 여부도 동일한 상태는 사전 순
         return -1 if a < b else 1
+
 
 def value_to_latex(value: ValueType) -> str:
     if isinstance(value, Vector):
@@ -81,15 +86,15 @@ def value_to_latex(value: ValueType) -> str:
         if value.real != 0:
             _real = str(to_int_if_possible(value.real))
         if value.imag != 0:
-            _imag = str(to_int_if_possible(abs(value.imag))) + r' \textit{i}'     # i는 italic으로 표시
+            _imag = str(to_int_if_possible(abs(value.imag))) + r' \textit{i}'  # i는 italic으로 표시
 
-        if value.real != 0 and value.imag != 0:     # a+bi -> (a + bi), a-bi -> (a - bi)
+        if value.real != 0 and value.imag != 0:  # a+bi -> (a + bi), a-bi -> (a - bi)
             _value = '(' + _real + (' + ' if value.imag >= 0 else ' - ') + _imag + ')'
-        elif _real + _imag:     # a + 0i -> a, 0 + bi -> bi
+        elif _real + _imag:  # a + 0i -> a, 0 + bi -> bi
             _value = _real + _imag
-        else:   # 0 + 0i -> 0
+        else:  # 0 + 0i -> 0
             _value = '0'
-    else:   # int, float
+    else:  # int, float
         _value = str(to_int_if_possible(value))
 
     def simplify_exp(match):
@@ -122,11 +127,13 @@ def value_to_latex(value: ValueType) -> str:
 
     return _value
 
+
 def to_unit_if_possible(x: 'ComplexUnit') -> 'ComplexUnit | Unit':
     if len(x.elements) == 1 and x.scale == 1 and all(v == 1 for v in x.elements.values()):
         return next(iter(x.elements))
     else:
         return x
+
 
 class Prefix(Enum):
     Y = 1e24
@@ -149,8 +156,10 @@ class Prefix(Enum):
     z = 1e-21
     y = 1e-24
 
+
 class UnitError(Exception):
     pass
+
 
 class UnitBase(ABC):
     def __init__(self, scale: ValueType = 1, depth: int = 0):
@@ -176,7 +185,7 @@ class UnitBase(ABC):
             return Quantity(Vector(*other), self)
         elif isinstance(other, ValueType):
             return Quantity(other, self)
-        elif isinstance(other, Broadcastable):
+        elif isinstance(other, Iterable):
             return type(other)([self * v for v in other])
         else:
             return NotImplemented
@@ -239,6 +248,7 @@ class UnitBase(ABC):
     def elements(self) -> Counter:
         return NotImplemented
 
+
 class Unit(UnitBase):
     _instances: dict[tuple[str, ValueType, int], 'Unit'] = {}
 
@@ -247,7 +257,7 @@ class Unit(UnitBase):
             return cls._instances[symbol, scale, depth]
 
         instance = super().__new__(cls)
-        if scale == 1:     # scale이 1이 아닌 기본 Unit은 ComplexUnit으로 만들어야 하며, 허용되는 이유는 오직 Quantity 생성을 위해서.
+        if scale == 1:  # scale이 1이 아닌 기본 Unit은 ComplexUnit으로 만들어야 하며, 허용되는 이유는 오직 Quantity 생성을 위해서.
             cls._instances[symbol, scale, depth] = instance
         return instance
 
@@ -320,6 +330,7 @@ class Unit(UnitBase):
     @property
     def elements(self) -> Counter:
         return Counter((self, 1))
+
 
 class ComplexUnit(UnitBase):
     def __init__(self, elements: Counter[Unit] = None, scale: int | float | complex = 1):
@@ -413,7 +424,7 @@ class ComplexUnit(UnitBase):
                 is_all_equal = False
                 break
 
-        if not (is_all_equal and ret_keys[0].depth == 0):   # not (모든 depth가 0인 경우)
+        if not (is_all_equal and ret_keys[0].depth == 0):  # not (모든 depth가 0인 경우)
             if is_all_equal:
                 target, target_p = ret_keys[0], ret.elements[ret_keys[0]]
 
@@ -466,6 +477,7 @@ class ComplexUnit(UnitBase):
     def elements(self):
         return self._elements
 
+
 class DelayedUnit(Unit):
     def __new__(cls, symbol: str, represents: ComplexUnit):
         return super().__new__(cls, symbol, 1, represents.depth + 1)
@@ -492,12 +504,13 @@ class DelayedUnit(Unit):
     def one(self) -> 'DelayedUnit':
         return DelayedUnit(self.symbol, self._represents, 1)
 
+
 class PrefixUnit(Unit):
     def __new__(cls, prefix: Prefix, unit: Unit):
         return super().__new__(cls, prefix.name + unit.symbol, 1, unit.depth + 1)
 
     def __init__(self, prefix: Prefix, unit: Unit):
-        if isinstance(unit, PrefixUnit):        # unit은 Unit 또는 DelayedUnit이어야 함
+        if isinstance(unit, PrefixUnit):  # unit은 Unit 또는 DelayedUnit이어야 함
             raise TypeError(f"PrefixUnit.__init__: {type(unit)}")
 
         if unit.symbol == 'kg':
@@ -552,6 +565,7 @@ class PrefixUnit(Unit):
     @property
     def unit(self) -> Unit:
         return self._unit
+
 
 class Quantity:
     def __init__(self, value: ValueType, unit: UnitBase):
@@ -609,7 +623,7 @@ class Quantity:
     def __eq__(self, other) -> bool:
         if isinstance(other, Quantity):
             if self.value == other.value:
-                return self.unit == other.unit if self.value != 0 else True     # 값이 0이면 단위는 무시됨
+                return self.unit == other.unit if self.value != 0 else True  # 값이 0이면 단위는 무시됨
             else:
                 _si_a, _si_b = self.si(), other.si()
                 return _si_a.value == _si_b.value and _si_a.unit == _si_b.unit
@@ -689,7 +703,7 @@ class Quantity:
             return self * Vector(*other)
         elif isinstance(other, ValueType):
             return Quantity(self.value * other, self.unit)
-        elif isinstance(other, Broadcastable):   # iterable한 객체는 broadcast
+        elif isinstance(other, Iterable):  # iterable한 객체는 broadcast
             return type(other)([self * v for v in other])
         else:
             return NotImplemented
@@ -715,7 +729,7 @@ class Quantity:
             return self @ Vector(*other)
         elif isinstance(other, ValueType):
             return Quantity(self.value @ other, self.unit)
-        elif isinstance(other, Broadcastable):
+        elif isinstance(other, Iterable):
             return type(other)([self @ v for v in other])
         else:
             return NotImplemented
@@ -761,6 +775,7 @@ class Quantity:
     @property
     def e(self) -> tuple['Quantity', ...]:
         return tuple(v * self.unit for v in self.value)
+
 
 kg = Unit('kg')
 m = Unit('m')
