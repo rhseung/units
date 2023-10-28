@@ -30,12 +30,13 @@ from .utils import *
 from abc import ABC, abstractmethod
 from enum import Enum
 from functools import cmp_to_key
-from typing import TypeAlias
+from typing import TypeAlias, Callable
 from numpy import ndarray
+from copy import copy, deepcopy
 import re
 
 ValueType: TypeAlias = int | float | complex | Vector
-Iterable: TypeAlias = list | ndarray
+Broadcastable: TypeAlias = list | ndarray
 
 def unit(fmt: str | int | float) -> 'UnitBase':
     if isinstance(fmt, str):
@@ -58,14 +59,16 @@ def unit_sort_key(a_: 'Unit', b_: 'Unit'):
     a, b = a_.symbol, b_.symbol
     l_a, l_b = len(a), len(b)
 
+    # 길이가 긴 것이 최우선이고, 길이가 같으면 대문자부터, 그리고 사전 순 정렬
+
     if a == b:
         return 0
+    elif l_a != l_b:    # 길이가 짧은 것이 뒤로 밀림
+        return -1 if l_a > l_b else 1
     elif a.isupper() and b.islower():  # 대문자가 소문자보다 우선
         return -1
     elif a.islower() and b.isupper():  # 대문자가 소문자보다 우선
         return 1
-    elif l_a != l_b:    # 길이가 짧은 것이 뒤로 밀림
-        return -1 if l_a > l_b else 1
     else:   # 길이도 같고, 대소문자 여부도 동일한 상태는 사전 순
         return -1 if a < b else 1
 
@@ -150,8 +153,16 @@ class UnitError(Exception):
     pass
 
 class UnitBase(ABC):
-    def __init__(self):
-        self._scale: ValueType = 1
+    def __init__(self, scale: ValueType = 1, depth: int = 0):
+        if not isinstance(scale, ValueType):
+            raise TypeError(f"UnitBase.__init__: {type(scale)}")
+        if not isinstance(depth, int):
+            raise TypeError(f"UnitBase.__init__: {type(depth)}")
+        if depth < 0:
+            raise ValueError(f"UnitBase.__init__: {depth}")
+
+        self._scale: ValueType = scale
+        self._depth: int = depth
 
     @abstractmethod
     def __pow__(self, power: int | float) -> 'ComplexUnit':
@@ -165,7 +176,7 @@ class UnitBase(ABC):
             return Quantity(Vector(*other), self)
         elif isinstance(other, ValueType):
             return Quantity(other, self)
-        elif isinstance(other, Iterable):
+        elif isinstance(other, Broadcastable):
             return type(other)([self * v for v in other])
         else:
             return NotImplemented
@@ -191,8 +202,7 @@ class UnitBase(ABC):
         return NotImplemented
 
     def to(self, unit: 'UnitBase') -> 'UnitBase':
-        _si_a = self.si()
-        _si_b = unit.si()
+        _si_a, _si_b = self.si(), unit.si()
 
         if _si_a.elements == _si_b.elements:
             if _si_a.scale == _si_b.scale:
@@ -200,7 +210,7 @@ class UnitBase(ABC):
             else:
                 return ComplexUnit(unit.elements, _si_a.scale / _si_b.scale)
         else:
-            return NotImplemented
+            raise UnitError(f"Cannot convert {self} to {unit}.")
 
     def is_dimensionless(self) -> bool:
         return False
@@ -222,28 +232,31 @@ class UnitBase(ABC):
         return self._scale
 
     @property
+    def depth(self) -> int:
+        return self._depth
+
+    @property
     def elements(self) -> Counter:
         return NotImplemented
 
 class Unit(UnitBase):
-    _instances: dict[tuple[str, ValueType], 'Unit'] = {}
+    _instances: dict[tuple[str, ValueType, int], 'Unit'] = {}
 
-    def __new__(cls, symbol: str = '', scale: ValueType = 1):
-        if (symbol, scale) in cls._instances:
-            return cls._instances[symbol, scale]
+    def __new__(cls, symbol: str = '', scale: ValueType = 1, depth: int = 0):
+        if (symbol, scale, depth) in cls._instances:
+            return cls._instances[symbol, scale, depth]
 
         instance = super().__new__(cls)
         if scale == 1:     # scale이 1이 아닌 기본 Unit은 ComplexUnit으로 만들어야 하며, 허용되는 이유는 오직 Quantity 생성을 위해서.
-            cls._instances[symbol, scale] = instance
+            cls._instances[symbol, scale, depth] = instance
         return instance
 
-    def __init__(self, symbol: str = '', scale: ValueType = 1):
-        super().__init__()
+    def __init__(self, symbol: str = '', scale: ValueType = 1, depth: int = 0):
         if not symbol.isalpha():
             raise ValueError(f"Unit.__init__: '{symbol}' is not a valid unit.")
 
+        super().__init__(scale, depth)
         self._symbol = symbol
-        self._scale = scale
 
     def __deepcopy__(self) -> "Unit":
         return self
@@ -310,13 +323,11 @@ class Unit(UnitBase):
 
 class ComplexUnit(UnitBase):
     def __init__(self, elements: Counter[Unit] = None, scale: int | float | complex = 1):
-        super().__init__()
-
-        self._scale = scale
+        super().__init__(scale, max((e.depth for e in elements), default=0) + 1)
         self._elements: Counter[Unit] = elements or Counter()
 
-    def __deepcopy__(self) -> "ComplexUnit":
-        return self
+    def __copy__(self) -> "ComplexUnit":
+        return ComplexUnit(copy(self.elements), self.scale)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, ComplexUnit):
@@ -389,20 +400,37 @@ class ComplexUnit(UnitBase):
         else:
             return r'$\mathrm {' + _txt + '}$'
 
-    def expand(self) -> 'ComplexUnit':
-        return NotImplemented
+    def expand(self) -> 'ComplexUnit | Unit':
+        if len(self.elements) == 0:
+            return self
 
-        # if self.is_dimensionless():
-        #     return self
-        #
-        # ret = None
-        # for _u, _p in self.elements.items():
-        #     if ret is None:
-        #         ret = _u.expand() ** _p
-        #     else:
-        #         ret *= _u.expand() ** _p
-        #
-        # return ComplexUnit(ret.elements, self.scale * ret.scale)
+        ret = copy(self)
+        ret_keys = sorted(list(ret.elements.keys()), key=cmp_to_key(unit_sort_key))
+
+        is_all_equal = True
+        for i in range(1, len(ret_keys)):
+            if ret_keys[i].depth != ret_keys[0].depth:
+                is_all_equal = False
+                break
+
+        if not (is_all_equal and ret_keys[0].depth == 0):   # not (모든 depth가 0인 경우)
+            if is_all_equal:
+                target, target_p = ret_keys[0], ret.elements[ret_keys[0]]
+
+                del ret.elements[target]
+                ret *= target.expand() ** target_p
+            else:
+                max_i = 0
+                for i in range(len(ret_keys)):
+                    if ret_keys[i].depth > ret_keys[max_i].depth:
+                        max_i = i
+
+                target, target_p = ret_keys[max_i], ret.elements[ret_keys[max_i]]
+
+                del ret.elements[target]
+                ret *= target.expand() ** target_p
+
+        return to_unit_if_possible(ret)
 
     def si(self) -> 'ComplexUnit | Unit':
         if len(self.elements) == 0:
@@ -439,17 +467,11 @@ class ComplexUnit(UnitBase):
         return self._elements
 
 class DelayedUnit(Unit):
-    def __new__(cls, symbol: str, represents: ComplexUnit, scale: ValueType = 1):
-        if (symbol, scale) in cls._instances:
-            return cls._instances[symbol, scale]
+    def __new__(cls, symbol: str, represents: ComplexUnit):
+        return super().__new__(cls, symbol, 1, represents.depth + 1)
 
-        instance = super().__new__(cls, symbol, scale)
-        if scale == 1:
-            cls._instances[symbol, scale] = instance
-        return instance
-
-    def __init__(self, symbol: str, represents: ComplexUnit, scale: ValueType = 1):
-        super().__init__(symbol, scale)
+    def __init__(self, symbol: str, represents: ComplexUnit):
+        super().__init__(symbol, 1, represents.depth + 1)
         self._represents = represents
 
     def __hash__(self):
@@ -471,24 +493,17 @@ class DelayedUnit(Unit):
         return DelayedUnit(self.symbol, self._represents, 1)
 
 class PrefixUnit(Unit):
-    def __new__(cls, prefix: Prefix, unit: Unit, scale: ValueType = 1):
-        symbol = prefix.name + unit.symbol
-        if symbol and (symbol, scale) in cls._instances:
-            return cls._instances[symbol, scale]
+    def __new__(cls, prefix: Prefix, unit: Unit):
+        return super().__new__(cls, prefix.name + unit.symbol, 1, unit.depth + 1)
 
-        instance = super().__new__(cls, symbol, scale)
-        if scale == 1:
-            cls._instances[symbol, scale] = instance
-        return instance
-
-    def __init__(self, prefix: Prefix, unit: Unit, scale: ValueType = 1):
-        if isinstance(unit, PrefixUnit):  # unit은 상속된 Unit 말고, 오직 Unit만 올 수 있음.
+    def __init__(self, prefix: Prefix, unit: Unit):
+        if isinstance(unit, PrefixUnit):        # unit은 Unit 또는 DelayedUnit이어야 함
             raise TypeError(f"PrefixUnit.__init__: {type(unit)}")
 
         if unit.symbol == 'kg':
             raise ValueError("PrefixUnit.__init__: kg cannot be prefixed.")
 
-        super().__init__(prefix.name + unit.symbol, scale)
+        super().__init__(prefix.name + unit.symbol, 1, unit.depth + 1)
         self._prefix = prefix
         self._unit = unit
 
@@ -674,7 +689,7 @@ class Quantity:
             return self * Vector(*other)
         elif isinstance(other, ValueType):
             return Quantity(self.value * other, self.unit)
-        elif isinstance(other, Iterable):   # iterable한 객체는 broadcast
+        elif isinstance(other, Broadcastable):   # iterable한 객체는 broadcast
             return type(other)([self * v for v in other])
         else:
             return NotImplemented
@@ -700,7 +715,7 @@ class Quantity:
             return self @ Vector(*other)
         elif isinstance(other, ValueType):
             return Quantity(self.value @ other, self.unit)
-        elif isinstance(other, Iterable):
+        elif isinstance(other, Broadcastable):
             return type(other)([self @ v for v in other])
         else:
             return NotImplemented
