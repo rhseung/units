@@ -5,7 +5,7 @@
 pip install rhseung.units
 ```
 
-## how to use
+## features
 ```py
 from units import *
 
@@ -17,9 +17,9 @@ print(3*kg*m/s**2)
 
 <img src="https://github.com/rhseung/units/assets/56152093/5a124ebd-803f-4eb1-96b9-3788820695b8)https://github.com/rhseung/units/assets/56152093/5a124ebd-803f-4eb1-96b9-3788820695b8" alt="LaTeX compatible" width="250"/>  
 
-jupyter notebook 환경에서 사용할 시 LaTeX를 지원합니다.
+jupyter notebook 환경에서 사용할 시 LaTeX를 지원합니다.  
+<br>
 
-## features
 ```py
 print(3*kg)
 print(3*kg*m)
