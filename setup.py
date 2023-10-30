@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
 	name='rhseung.units',
-	version='0.2',
+	version='0.3',
 	description='A package for handling physics units.',
 	author='rhseung',
 	license='MIT',

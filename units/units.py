@@ -502,7 +502,7 @@ class DelayedUnit(Unit):
         return self._represents.si()
 
     def one(self) -> 'DelayedUnit':
-        return DelayedUnit(self.symbol, self._represents, 1)
+        return DelayedUnit(self.symbol, self._represents)
 
 
 class PrefixUnit(Unit):
@@ -556,7 +556,7 @@ class PrefixUnit(Unit):
             return ComplexUnit(_si.elements, self._prefix.value * _si.scale)
 
     def one(self) -> 'PrefixUnit':
-        return PrefixUnit(self.prefix, self.unit, 1)
+        return PrefixUnit(self.prefix, self.unit)
 
     @property
     def prefix(self) -> Prefix:
