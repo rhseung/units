@@ -8,6 +8,8 @@ from copy import copy
 import re
 
 __all__ = [
+    'Vector',
+
     'expand', 'si',
 
     'g', 'm', 's', 'A', 'K', 'mol', 'cd', 'rad',

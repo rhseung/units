@@ -1,3 +1,4 @@
 from units import *
 
-print(expand(3*N))
+v = Vector(1, 2, 3)
+print(f"{v:p}")

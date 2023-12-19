@@ -217,7 +217,7 @@ class Vector:
 
 	def __format__(self, format_spec) -> str:
 		if format_spec.endswith('p'):  # polar coordinates
-			if self.dim not in (2, 3):
+			if not (2 <= self.dim <= 3):
 				raise DimensionError(expected='2d or 3d', input=self.dim)
 
 			options = '{:' + format_spec[:-1] + '}'
@@ -232,12 +232,14 @@ class Vector:
 			options = '{:' + format_spec[:-1] + '}'
 			text = [options.format(_e) for _e in self._args]
 
-			subscripts = '₀₁₂₃₄₅₆₇₈₉'
-			ret = ' + '.join(f"{txt} e{''.join(subscripts[int(c)] for c in str(i))}" for i, txt in enumerate(text))
+			if self.dim <= 3:
+				ret = ' + '.join(f"{txt} {'ijk'[i]}" for i, txt in enumerate(text))
+			else:
+				ret = ' + '.join(f"{txt} e_{i}" for i, txt in enumerate(text))
 
 			return '(' + ret + ')'
 		else:
-			ret = f"{', '.join(map(lambda x: ('{:' + format_spec + '}').format(x), self._args))}"
+			ret = f"{' '.join(map(lambda x: ('{:' + format_spec + '}').format(x), self._args))}"
 
 			return '(' + ret + ')'
 
