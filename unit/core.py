@@ -104,6 +104,7 @@ class Units(AbstractUnit):
     #   - priority queue이면서 지수 값을 저장하려면 어떻게 해야하는가?
     #       - (Unit, float) 튜플로 저장하면 됨
     #       - 또는, https://docs.python.org/ko/3.11/library/heapq.html 여기서 볼 수 있듯 PrioritizedItem 클래스를 만들고 지수는 compare=False로 설정하면 됨
+    #   - priority queue를 사용하기 굉장히 애매함; Unit 클래스의 비교 연산자를 구현하고 priority queue를 사용하는 것이 더 나을 것 같음
     #   - 생성자에 elements 인자를 없애는게 어떰
     #       - 어차피 처음 생성되는 Units 인스턴스는 Unit 두 개의 곱임 -> __init__(self, unit1: Unit, unit2: Unit)
     #       - 그 다음부터는 Units 인스턴스의 priority queue에 접근해서 직접 삽입을 해주면 됨 (Units * Unit 상황일 때 self.priority_queue.put((unit, 1))) 같은 느낌)
