@@ -6,10 +6,11 @@ pip install rhseung.units
 ```
 
 ## features
-```py
-from units import *
 
-print(3*kg*m/s**2)
+```py
+from _units import *
+
+print(3 * kg * m / s ** 2)
 ```
 
 `kg`, `m`, `s`, `A`, `K`, `mol`, `cd`, `rad`, `N`, `J`, `Pa`, `W`, `atm`, `C`, `V`, `Ω`, `Wb`, `T`, `H`, `F` 등의 단위와  

@@ -534,7 +534,7 @@ class PrefixUnit(Unit):
 
     def __lt__(self, other):
         if self.unit != other:
-            raise UnitError("PrefixUnit.__lt__: Cannot compare different units.")
+            raise UnitError("PrefixUnit.__lt__: Cannot compare different _units.")
         return self.unit == other and self._prefix.value < 1
 
     def __ge__(self, other):
