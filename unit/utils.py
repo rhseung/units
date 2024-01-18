@@ -1,5 +1,5 @@
 __all__ = [
-    'total_calculating', 'number_to_numpy', 'str_pretty', 'CompatibleType', 'DType', 'ValueType', 'CalculableDict'
+    'total_calculating', 'number_to_numpy', 'str_pretty', 'BuiltinNumber', 'NumpyNumber', 'ValueType', 'CalculableDict'
 ]
 
 import numpy as np
@@ -7,22 +7,19 @@ import operator
 from typing import Callable, TypeVar
 
 BinaryOperator = Callable[[any, any], any]
-CompatibleType = int | float | complex
-DType = np.int32 | np.float64 | np.cdouble | np.ndarray
-ValueType = DType | np.ndarray
+BuiltinNumber = int | float | complex
+NumpyNumber = np.int32 | np.float64 | np.cdouble
+ValueType = NumpyNumber | np.ndarray
 
-def generate_operator(func: BinaryOperator, operator_name: str) -> tuple[BinaryOperator, BinaryOperator]:
-    def forward(a, b):
+def reverse_func(func: BinaryOperator) -> BinaryOperator:
+    name = func.__name__.replace("_", "")
+
+    def f(a, b):
         return func(a, b)
-    forward.__name__ = f"__{operator_name}__"
-    forward.__doc__ = func.__doc__
+    f.__name__ = f"__r{name}__"
+    f.__doc__ = func.__doc__
 
-    def reverse(a, b):
-        return func(a, b)
-    reverse.__name__ = f"__r{operator_name}__"
-    reverse.__doc__ = func.__doc__
-
-    return forward, reverse
+    return f
 
 def total_calculating(cls):
     reverable_operators: list[BinaryOperator] = [
@@ -41,7 +38,7 @@ def total_calculating(cls):
 
     return cls
 
-def number_to_numpy(number: CompatibleType | DType) -> DType:
+def number_to_numpy(number: BuiltinNumber | NumpyNumber) -> NumpyNumber:
     if isinstance(number, int | np.int32):
         return np.int32(number)
     elif isinstance(number, float | np.float64):
@@ -51,7 +48,7 @@ def number_to_numpy(number: CompatibleType | DType) -> DType:
     else:
         raise TypeError(f"unsupported type {type(number)}")
 
-def str_pretty(number: CompatibleType | DType) -> str:
+def str_pretty(number: BuiltinNumber | NumpyNumber) -> str:
     number = number_to_numpy(number)
 
     if isinstance(number, np.int32):
