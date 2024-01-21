@@ -1,4 +1,4 @@
-from .utils import total_calculating, str_pretty, BuiltinNumber, NumpyNumber
+from .utils import number_to_str_pretty, BuiltinNumber, NumpyNumber
 
 import numpy as np
 from copy import deepcopy
@@ -44,7 +44,7 @@ class Dimension:
         return self._value == other._value
 
     def __str__(self):
-        return "*".join([f"{key}" if value == 1 else f"{key}^{str_pretty(value)}" for key, value in self._value.items() if value != 0])
+        return "*".join([f"{key}" if value == 1 else f"{key}^{number_to_str_pretty(value)}" for key, value in self._value.items() if value != 0])
 
     def __repr__(self):
         return self.__str__()

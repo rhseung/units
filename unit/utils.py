@@ -1,15 +1,21 @@
 __all__ = [
-    'total_calculating', 'number_to_numpy', 'str_pretty', 'BuiltinNumber', 'NumpyNumber', 'ValueType', 'CalculableDict'
+    'builtin_to_numpy_number', 'number_to_str_pretty', 'CalculableDict',
+    'BuiltinNumber', 'NumpyNumber', 'Int', 'Float', 'Complex', 'Matrix', 'ValueType',
 ]
 
 import numpy as np
-import operator
 from typing import Callable, TypeVar
 
-BinaryOperator = Callable[[any, any], any]
+Int = np.int32
+Float = np.float64
+Complex = np.cdouble
+Matrix = np.ndarray
+
 BuiltinNumber = int | float | complex
-NumpyNumber = np.int32 | np.float64 | np.cdouble
-ValueType = NumpyNumber | np.ndarray
+NumpyNumber = Int | Float | Complex
+ValueType = NumpyNumber | Matrix
+
+BinaryOperator = Callable[[any, any], any]
 
 def reverse_func(func: BinaryOperator) -> BinaryOperator:
     name = func.__name__.replace("_", "")
@@ -21,41 +27,26 @@ def reverse_func(func: BinaryOperator) -> BinaryOperator:
 
     return f
 
-def total_calculating(cls):
-    reverable_operators: list[BinaryOperator] = [
-        operator.add, operator.sub, operator.mul, operator.truediv, operator.floordiv,
-        operator.mod, operator.pow, operator.matmul, operator.lshift, operator.rshift,
-        operator.and_, operator.or_, operator.xor, divmod
-    ]
-
-    for oper in reverable_operators:
-        operator_name = oper.__name__.replace("_", "")
-        func = getattr(cls, f"_{operator_name}", None)
-        if func:
-            forward, reverse = generate_operator(func, operator_name)
-            setattr(cls, forward.__name__, forward)
-            setattr(cls, reverse.__name__, reverse)
-
-    return cls
-
-def number_to_numpy(number: BuiltinNumber | NumpyNumber) -> NumpyNumber:
-    if isinstance(number, int | np.int32):
-        return np.int32(number)
-    elif isinstance(number, float | np.float64):
-        return np.float64(number)
-    elif isinstance(number, complex | np.cdouble):
-        return np.cdouble(number)
+def builtin_to_numpy_number(number: BuiltinNumber | NumpyNumber | Matrix) -> ValueType:
+    if isinstance(number, int | Int):
+        return Int(number)
+    elif isinstance(number, float | Float):
+        return Float(number)
+    elif isinstance(number, complex | Complex):
+        return Complex(number)
+    elif isinstance(number, Matrix):
+        return number
     else:
         raise TypeError(f"unsupported type {type(number)}")
 
-def str_pretty(number: BuiltinNumber | NumpyNumber) -> str:
-    number = number_to_numpy(number)
+def number_to_str_pretty(number: BuiltinNumber | NumpyNumber) -> str:
+    number = builtin_to_numpy_number(number)
 
-    if isinstance(number, np.int32):
+    if isinstance(number, Int):
         return f"{number}"
-    elif isinstance(number, np.float64):
+    elif isinstance(number, Float):
         return f"{number}".rstrip("0").rstrip(".")
-    elif isinstance(number, np.cdouble):
+    elif isinstance(number, Complex):
         real = f"{number.real}".rstrip("0").rstrip(".")
         imag = f"{number.imag:+}".rstrip("0").rstrip(".")
         return f"{real}{imag}i"
