@@ -6,18 +6,6 @@ from sortedcontainers import SortedDict
 from copy import deepcopy
 from abc import ABC, abstractmethod
 
-# test: 계산 구멍 찾기
-#   - BU * BU
-#   - BU * U
-#   - BU * US
-#   - U * BU
-#   - U * U
-#   - U * US
-#   - US * BU
-#   - US * U
-#   - US * US
-#   - Quantity 구현하면 더 늘어남.
-
 class AbstractUnit(ABC):
     """
     AbstractUnit is an abstract class for every unit class.
@@ -41,13 +29,17 @@ class AbstractUnit(ABC):
 
     def __eq__(self, other) -> bool:
         if other == 0:
-            return self.scale == 0  # test: 0은 단위 상관없이 동일
+            return self.scale == 0
         else:
             return isinstance(other, AbstractUnit) and self.scale == other.scale and self.dim == other.dim
 
     def __str__(self) -> str:
         return self.__format__("")
 
+    def __abs__(self):
+        return self.scale
+
+    @abstractmethod
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -86,7 +78,7 @@ class BaseUnit(AbstractUnit):
     def __new__(cls, symbol: str, dim: Dimension, scale: BuiltinNumber | ValueType = 1):
         if not isinstance(symbol, str):
             raise TypeError(f"unsupported type {type(symbol)}, must be str")
-        if re.match(r'^[a-zA-Zα-ωΑ-Ω_]+\d*$', symbol) is None:
+        if re.match(r'^[\S_]+\d*$', symbol) is None:
             raise ValueError("symbol must be alphabetic or greek letter or underscore and can be followed by number")
         if not isinstance(dim, Dimension):
             raise TypeError(f"unsupported type {type(dim)}, must be Dimension")
@@ -114,7 +106,7 @@ class BaseUnit(AbstractUnit):
 
     def __hash__(self) -> int:
         if self.scale == 0:
-            return hash(0)  # test: o = {(0인 단위): 3} 에서 o[0] += 3 하면 될까
+            return hash(0)
         else:
             return hash((self.dim, self.scale))
 
@@ -122,29 +114,27 @@ class BaseUnit(AbstractUnit):
         if not isinstance(other, BaseUnit):
             return NotImplemented
 
-        elements: SortedDict[BaseUnit, Float] = SortedDict()
-        elements[self] = Float(1)
-        if other in elements:
-            elements[other] += Float(1)
+        structure: SortedDict[BaseUnit, Float] = SortedDict()
+        structure[self] = Float(1)
+        if other in structure:
+            structure[other] += Float(1)
         else:
-            elements[other] = Float(1)
+            structure[other] = Float(1)
 
-        return Units(elements)
+        return Units(structure)
 
     def __truediv__(self, other: 'BaseUnit') -> 'Units':
         if not isinstance(other, BaseUnit):
             return NotImplemented
 
-        elements: SortedDict[BaseUnit, Float] = SortedDict()
-        elements[self] = Float(1)
-        if other in elements:
-            elements[other] -= Float(1)
+        structure: SortedDict[BaseUnit, Float] = SortedDict()
+        structure[self] = Float(1)
+        if other in structure:
+            structure[other] -= Float(1)
         else:
-            elements[other] = Float(-1)
+            structure[other] = Float(-1)
 
-        return Units(elements)
-
-    # todo: __rtruediv__ 안해서 계산 구멍 있을 듯
+        return Units(structure)
 
     def __pow__(self, power: BuiltinNumber | NumpyNumber, modulo=None) -> 'Units':
         if not isinstance(power, BuiltinNumber | NumpyNumber):
@@ -193,7 +183,16 @@ class BaseUnit(AbstractUnit):
         return self > other or self == other
 
     def __format__(self, format_spec: str) -> str:
-        return self.symbol
+        if format_spec == 'scale':
+            if self.scale == 1:
+                return self.symbol
+            else:
+                return f"{self.symbol} (* {number_to_str_pretty(self.scale)})"
+        else:
+            return self.symbol
+
+    def __repr__(self) -> str:
+        return self.__format__("scale")
 
     def _repr_latex_(self) -> str:
         pass
@@ -202,6 +201,8 @@ class Unit(BaseUnit):
     def __new__(cls, symbol: str, base: AbstractUnit, scale: BuiltinNumber | ValueType = 1):
         if not issubclass(type(base), AbstractUnit):
             raise TypeError(f"unsupported type {type(base)}, must be inherit from AbstractUnit")
+        if not isinstance(scale, BuiltinNumber | ValueType):
+            raise TypeError(f"unsupported type {type(scale)}, must be {BuiltinNumber} or {ValueType}")
 
         return super().__new__(cls, symbol, base.dim, scale * base.scale)
 
@@ -211,25 +212,22 @@ class Unit(BaseUnit):
         self.depth = base.depth + 1
         self.base = base
 
-    def __format__(self, format_spec: str) -> str:
-        return f"{self.symbol}"
-
 class Units(AbstractUnit):
-    def __new__(cls, elements: SortedDict[BaseUnit, Float], dim: Dimension = None,
+    def __new__(cls, structure: SortedDict[BaseUnit, Float], dim: Dimension = None,
                 scale: BuiltinNumber | ValueType = None, depth: int = None):
-        if not isinstance(elements, SortedDict):
-            raise TypeError(f"unsupported type {type(elements)}, must be SortedDict")
+        if not isinstance(structure, SortedDict):
+            raise TypeError(f"unsupported type {type(structure)}, must be SortedDict")
 
-        if len(elements) == 1 and (peek := elements.peekitem())[1] == 1:
-            return peek[0]  # test: {km: 1} => km 압축
+        if len(structure) == 1 and (peek := structure.peekitem())[1] == 1:
+            return peek[0]
         else:
             return super().__new__(cls)
 
-    def __init__(self, elements: SortedDict[BaseUnit, Float], dim: Dimension = None,
+    def __init__(self, structure: SortedDict[BaseUnit, Float], dim: Dimension = None,
                  scale: BuiltinNumber | ValueType = None, depth: int = None):
         super().__init__()  # 여기서 dim, scale, depth 기본 값 지정
-        self.elements: SortedDict[BaseUnit, Float] \
-            = SortedDict({unit: Float(exponent) for unit, exponent in elements.items() if exponent != 0})
+        self.structure: SortedDict[BaseUnit, Float] \
+            = SortedDict({unit: Float(exponent) for unit, exponent in structure.items() if exponent != 0})
 
         if dim:
             self.dim = dim
@@ -238,7 +236,7 @@ class Units(AbstractUnit):
         if depth:
             self.depth = depth
 
-        for unit, exponent in elements.items():
+        for unit, exponent in self.structure.items():
             if not isinstance(unit, BaseUnit):
                 raise TypeError(f"unsupported type {type(unit)}, must be BaseUnit")
             if not isinstance(exponent, Float):
@@ -248,34 +246,37 @@ class Units(AbstractUnit):
                 self.dim *= unit.dim ** exponent
             if not scale:
                 self.scale *= unit.scale ** exponent
+            unit.scale = 1      # fixme: ``sortedcontainers`` 모듈의 SortedDict는 key를 변경하면 KeyError가 남.
             if not depth:
                 self.depth = max(self.depth, unit.depth + 1)
 
     def __deepcopy__(self, memodict={}):
-        return Units(deepcopy(self.elements), self.dim, self.scale, self.depth)
+        return Units(deepcopy(self.structure), self.dim, self.scale, self.depth)
 
     def __mul__(self, other: AbstractUnit) -> 'Units':
         if not isinstance(other, AbstractUnit):
             return NotImplemented
 
-        elements: SortedDict[BaseUnit, Float] = deepcopy(self.elements)
+        # todo: other이 dimless라면 scale에만 곱하기
+
+        structure: SortedDict[BaseUnit, Float] = deepcopy(self.structure)
 
         if isinstance(other, BaseUnit):
-            if other in elements:
-                elements[other] += Float(1)
+            if other in structure:
+                structure[other] += Float(1)
             else:
-                elements[other] = Float(1)
+                structure[other] = Float(1)
         elif isinstance(other, Units):
-            for unit, exponent in other.elements.items():
-                if unit in elements:
-                    elements[unit] += exponent
+            for unit, exponent in other.structure.items():
+                if unit in structure:
+                    structure[unit] += exponent
                 else:
-                    elements[unit] = exponent
+                    structure[unit] = exponent
         else:
             raise TypeError(f"unsupported type {type(other)}, must be AbstractUnit")
 
         return Units(
-            elements,
+            structure,
             dim=self.dim * other.dim,
             scale=self.scale * other.scale,
             depth=max(self.depth, other.depth + 1)
@@ -288,26 +289,26 @@ class Units(AbstractUnit):
         if not isinstance(other, AbstractUnit):
             return NotImplemented
 
-        elements: SortedDict[BaseUnit, Float] = deepcopy(self.elements)
+        structure: SortedDict[BaseUnit, Float] = deepcopy(self.structure)
 
         if isinstance(other, BaseUnit):
-            if other in elements:
-                elements[other] -= Float(1)
+            if other in structure:
+                structure[other] -= Float(1)
             else:
-                elements[other] = Float(-1)
+                structure[other] = Float(-1)
         elif isinstance(other, Units):
-            for unit, exponent in other.elements.items():
-                if unit in elements:
-                    elements[unit] -= exponent
+            for unit, exponent in other.structure.items():
+                if unit in structure:
+                    structure[unit] -= exponent
                 else:
-                    elements[unit] = -exponent
+                    structure[unit] = -exponent
         else:
             raise TypeError(f"unsupported type {type(other)}, must be AbstractUnit")
 
         return Units(
-            elements,
-            dim=self.dim * other.dim,
-            scale=self.scale * other.scale,
+            structure,
+            dim=self.dim / other.dim,
+            scale=self.scale / other.scale,
             depth=max(self.depth, other.depth + 1)
         )
 
@@ -318,23 +319,23 @@ class Units(AbstractUnit):
         if not isinstance(power, BuiltinNumber | NumpyNumber):
             return NotImplemented
 
-        elements: SortedDict[BaseUnit, Float] = deepcopy(self.elements)
+        structure: SortedDict[BaseUnit, Float] = deepcopy(self.structure)
 
-        for unit, exponent in elements.items():
-            elements[unit] *= power
+        for unit, exponent in structure.items():
+            structure[unit] *= power
 
         return Units(
-            elements,
+            structure,
             dim=self.dim ** power,
             scale=self.scale ** power,
             depth=self.depth
         )
 
-    def __format__(self, format_spec) -> str:
+    def __format__(self, format_spec: str) -> str:
         front_part = ''
         back_part = ''
 
-        for unit, exponent in self.elements.items():
+        for unit, exponent in self.structure.items():
             if exponent > 0:
                 if exponent == 1:
                     front_part += f"{unit}"
@@ -348,7 +349,18 @@ class Units(AbstractUnit):
                     back_part += f"{unit}^{number_to_str_pretty(-exponent)}"
                 back_part += "⋅"
 
-        return (front_part.rstrip('⋅') + '/' + back_part.rstrip('⋅')).rstrip('/')
+        ret = (front_part.rstrip('⋅') + '/' + back_part.rstrip('⋅')).rstrip('/')
+
+        if format_spec == 'scale':
+            if self.scale == 1:
+                return ret
+            else:
+                return f"{ret} (* {number_to_str_pretty(self.scale)})"
+        else:
+            return ret
+
+    def __repr__(self) -> str:
+        return self.__format__("scale")
 
     def _repr_latex_(self) -> str:
         pass

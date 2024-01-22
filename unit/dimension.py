@@ -1,7 +1,4 @@
-from .utils import number_to_str_pretty, BuiltinNumber, NumpyNumber
-
-import numpy as np
-from copy import deepcopy
+from .utils import number_to_str_pretty, BuiltinNumber, NumpyNumber, Float
 
 class Dimension:
     def __init__(self,
@@ -13,15 +10,15 @@ class Dimension:
                  amount_of_substance: BuiltinNumber | NumpyNumber = 0.,
                  luminous_intensity: BuiltinNumber | NumpyNumber = 0.
                  ):
-        # todo: 지수에 complex?
-        self._value: dict[str, np.float64] = {
-            'L': np.float64(length),
-            'M': np.float64(mass),
-            'T': np.float64(time),
-            'Θ': np.float64(temperature),
-            'I': np.float64(electric_current),
-            'N': np.float64(amount_of_substance),
-            'J': np.float64(luminous_intensity)
+
+        self._value: dict[str, Float] = {
+            'L': Float(length),
+            'M': Float(mass),
+            'T': Float(time),
+            'Θ': Float(temperature),
+            'I': Float(electric_current),
+            'N': Float(amount_of_substance),
+            'J': Float(luminous_intensity)
         }
 
     def __deepcopy__(self, memodict={}):
@@ -44,7 +41,10 @@ class Dimension:
         return self._value == other._value
 
     def __str__(self):
-        return "*".join([f"{key}" if value == 1 else f"{key}^{number_to_str_pretty(value)}" for key, value in self._value.items() if value != 0])
+        if all(value == 0 for value in self._value.values()):
+            return "dimless"
+        else:
+            return "⋅".join([f"{key}" if value == 1 else f"{key}^{number_to_str_pretty(value)}" for key, value in self._value.items() if value != 0])
 
     def __repr__(self):
         return self.__str__()
@@ -81,7 +81,7 @@ class Dimension:
         if not isinstance(other, BuiltinNumber | NumpyNumber):
             raise TypeError(f"unsupported type {type(other)}, must be CompatibleType | DType")
 
-        other = np.float64(other)
+        other = Float(other)
 
         return Dimension(
             self._value['L'] * other,

@@ -8,7 +8,7 @@ pip install rhseung.units
 ## features
 
 ```py
-from _units import *
+from unit.legacy import *
 
 print(3 * kg * m / s ** 2)
 ```
