@@ -226,8 +226,17 @@ class Units(AbstractUnit):
     def __init__(self, structure: SortedDict[BaseUnit, Float], dim: Dimension = None,
                  scale: BuiltinNumber | ValueType = None, depth: int = None):
         super().__init__()  # 여기서 dim, scale, depth 기본 값 지정
-        self.structure: SortedDict[BaseUnit, Float] \
-            = SortedDict({unit: Float(exponent) for unit, exponent in structure.items() if exponent != 0})
+
+        self.structure: SortedDict[BaseUnit, NumpyNumber] = SortedDict({})
+
+        for unit, exponent in structure.items():
+            if exponent == 0:
+                continue
+
+            self.dim *= unit.dim ** exponent
+            self.scale *= unit.scale ** exponent
+            self.depth = max(self.depth, unit.depth + 1)
+            self.structure[unit] = builtin_to_numpy_number(exponent)
 
         if dim:
             self.dim = dim
@@ -235,20 +244,6 @@ class Units(AbstractUnit):
             self.scale = scale
         if depth:
             self.depth = depth
-
-        for unit, exponent in self.structure.items():
-            if not isinstance(unit, BaseUnit):
-                raise TypeError(f"unsupported type {type(unit)}, must be BaseUnit")
-            if not isinstance(exponent, Float):
-                raise TypeError(f"unsupported type {type(exponent)}, must be float")
-
-            if not dim:
-                self.dim *= unit.dim ** exponent
-            if not scale:
-                self.scale *= unit.scale ** exponent
-            unit.scale = 1      # fixme: ``sortedcontainers`` 모듈의 SortedDict는 key를 변경하면 KeyError가 남.
-            if not depth:
-                self.depth = max(self.depth, unit.depth + 1)
 
     def __deepcopy__(self, memodict={}):
         return Units(deepcopy(self.structure), self.dim, self.scale, self.depth)

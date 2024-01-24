@@ -1,9 +1,5 @@
-__all__ = [
-    'builtin_to_numpy_number', 'number_to_str_pretty', 'CalculableDict',
-    'BuiltinNumber', 'NumpyNumber', 'Int', 'Float', 'Complex', 'Matrix', 'ValueType',
-]
-
 import numpy as np
+from sortedcontainers import SortedDict
 from typing import Callable, TypeVar
 
 Int = np.int32
@@ -52,6 +48,13 @@ def number_to_str_pretty(number: BuiltinNumber | NumpyNumber) -> str:
         return f"{real}{imag}i"
     else:
         raise TypeError(f"unsupported type {type(number)}")
+
+class DefaultSortedDict(SortedDict):
+    def __missing__(self, key):
+        value = 0
+        self[key] = value
+
+        return value
 
 T = TypeVar('T')
 

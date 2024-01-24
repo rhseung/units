@@ -1,11 +1,9 @@
-__all__ = ['expand', 'si', 'dim', 'simplify']
-
 from sortedcontainers import SortedKeysView, SortedDict
 from copy import deepcopy
 
 from .core import *
 from .dimension import Dimension
-from .units import L, ohm, cm, m
+from .unit import L, ohm, cm, m
 from .utils import Float
 
 def expand(unit: AbstractUnit, target: AbstractUnit = None) -> AbstractUnit:
@@ -20,7 +18,6 @@ def expand(unit: AbstractUnit, target: AbstractUnit = None) -> AbstractUnit:
 
     if isinstance(unit, Unit):
         b = unit.base
-        b.scale = unit.scale    # test. *= 가 아니라 = 를 하는게 맞는가?
         return b
     elif isinstance(unit, Units):
         # 다 depth가 똑같으면 맨 앞을 expand
@@ -56,7 +53,6 @@ def si(unit: AbstractUnit) -> AbstractUnit:
 
     if isinstance(unit, Unit):
         b = si(unit.base)
-        b.scale = unit.scale    # test. *= 가 아니라 = 를 하는게 맞는가?
         return b
     elif isinstance(unit, Units):
         tmp = Units(SortedDict({}))

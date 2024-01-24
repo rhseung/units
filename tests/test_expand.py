@@ -3,9 +3,9 @@ from contextlib import contextmanager
 
 from sortedcontainers import SortedDict
 
-from unit import *
-from unit.core import Units
-from unit.functions import *
+from ..unit import *
+from ..unit.core import Units
+from ..unit.functions import *
 
 def test_expand():
     assert str(expand(ohm)) == 'V/A'

@@ -1,3 +1,3 @@
-from unit import __version__
+from ..unit import __version__
 
 __version__ = __version__

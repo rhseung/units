@@ -1,9 +1,9 @@
 import pytest
 from contextlib import contextmanager
 
-from unit import *
-from unit.core import Unit
-from unit.functions import *
+from ..unit import *
+from ..unit.core import Unit
+from ..unit.functions import *
 
 BU = m
 U = T
